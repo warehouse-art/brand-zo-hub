@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "identifier": "ly.brandzo.hub",
   "build": {
-    "frontendDist": "https://albarshi996.github.io/warehouse-system/"
+    "frontendDist": "https://warehouse-art.github.io/brand-zo-hub/"
   },
   "app": {
     "windows": [

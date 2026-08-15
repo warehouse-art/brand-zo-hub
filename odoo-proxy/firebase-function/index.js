@@ -20,7 +20,7 @@
 
 const { onRequest } = require('firebase-functions/v2/https');
 
-const ALLOWED_ORIGIN = 'https://albarshi996.github.io';
+const ALLOWED_ORIGIN = 'https://warehouse-art.github.io';
 
 const ALLOWLIST = {
   'product.product': ['search_read', 'read', 'create', 'write', 'unlink'],

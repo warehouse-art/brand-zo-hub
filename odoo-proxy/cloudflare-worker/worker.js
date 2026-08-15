@@ -19,7 +19,7 @@
  *   ODOO_API_KEY   API key (Settings → Account Security → New API Key)
  *
  * ── Allowed origin (set as a plain var in wrangler.toml) ─────────────────────
- *   ALLOWED_ORIGIN e.g. https://albarshi996.github.io
+ *   ALLOWED_ORIGIN e.g. https://warehouse-art.github.io
  *
  * Deploy:  npm i -g wrangler && wrangler deploy
  * Then set PUBLIC_ODOO_PROXY_URL to the worker URL and PUBLIC_ODOO_MODE=production.

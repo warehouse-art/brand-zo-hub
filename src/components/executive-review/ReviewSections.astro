@@ -23,7 +23,7 @@ const view = Astro.props.view ?? (section ? '' : 'overview');
 // `amber` هي حالة البيانات الفعلية في board.js — تُبقى `yellow` احتياطًا.
 const stateLabel = { green: 'مستقر', amber: 'يحتاج متابعة', yellow: 'يحتاج متابعة', red: 'يتطلب تدخلًا', 'on-track': 'تقدم مستمر', 'at-risk': 'معرض للخطر', blocked: 'متوقف' };
 
-// روابط وصور تسبقها `base` — البوابة تُنشر تحت `/warehouse-system`.
+// روابط وصور تسبقها `base` — البوابة تُنشر تحت `/brand-zo-hub`.
 const base = import.meta.env.BASE_URL.endsWith('/')
   ? import.meta.env.BASE_URL.slice(0, -1)
   : import.meta.env.BASE_URL;
