@@ -54,7 +54,7 @@ if (originUrl && toSlug(originUrl) !== toSlug(ws.repo)) {
 const c = COLORS[ws.color] ?? COLORS.cyan;
 const push = originUrl ? `origin ← ${toSlug(originUrl)}` : '(لا ريموت origin)';
 
-console.log(
+console.info(
   `\n${c}${BOLD}  ● ${ws.name}${OFF}${c} — ${ws.repo}${OFF}\n\n` +
     `  · الغرض: ${ws.purpose}\n` +
     `  · القواعد: ${ws.rules}\n` +
