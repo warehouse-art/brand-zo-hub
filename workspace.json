@@ -1,0 +1,15 @@
+{
+  "id": "company",
+  "name": "مستودع الشركة",
+  "repo": "warehouse-art/brand-zo-hub",
+  "color": "cyan",
+  "purpose": "النسخة المؤسسيّة — تُسلَّم لإدارة تقنية المعلومات وتُطوَّر وفق قواعدها",
+  "rules": "قواعد إدارة تقنية المعلومات هي الحاكمة — لا اجتهاد خارجها",
+  "pages": "https://warehouse-art.github.io/brand-zo-hub/",
+  "sibling": {
+    "name": "المستودع الشخصيّ",
+    "repo": "albarshi996/warehouse-system",
+    "remote": "https://github.com/albarshi996/warehouse-system.git",
+    "purpose": "مشروع الاشتراكات — تطويرٌ وفق أفكارنا"
+  }
+}
