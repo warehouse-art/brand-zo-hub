@@ -78,6 +78,14 @@ service cloud.firestore {
     // (fleet) أُضيف** لأنه يُنجز **تأكيد التسليم (POD)** فيخصم رصيد المركبة
     // (قرار المالك 2026-08-04). بوّابة `completeRoles` تحصر ما يُنجزه كلّ دور،
     // فالحركة لا تُنجز إلا POD. المشاهد ومستخدم الإدارة وحدهما خارجها.
+    // ‹FNB-107› مدير قطاع الأغذية — صاحب المدخل التشغيليّ (البراندات والفروع
+    // والمنيو). **ليس فاعلًا مخزنيًّا**: لا يقيّد حركةً ولا يعتمد صرفًا —
+    // ولذلك هو خارج `isStockActor` عمدًا، كما المندوب.
+    function isFnbManager() {
+      return isBootstrapAdmin() ||
+             (signedIn() && hasProfile() && isActive() && myRole() == 'fnb_manager');
+    }
+
     function isStockActor() {
       return isBootstrapAdmin() ||
              (signedIn() && hasProfile() && isActive() && myRole() in [
@@ -172,7 +180,11 @@ service cloud.firestore {
     //    المخزون الذي أدخلها. و⚖️ الإشعار الدائن CN للمالية كذلك. الفصل
     //    بين مَن يُدخل ومَن يعتمد هو الحارس، وهذه الطبقة على الخادم.
     function approveRoles(docType) {
-      return docType == 'GRN'     ? ['qc_inspector', 'warehouse_manager']
+      // ‹FNB-502› دورة الإنتاج: الشيف التنفيذيّ يعتمد، والمدير معتمِدٌ أعلى.
+      return docType == 'PRO'     ? ['executive_chef', 'warehouse_manager']
+           : docType == 'MIS'     ? ['executive_chef', 'warehouse_manager']
+           : docType == 'PRC'     ? ['executive_chef', 'warehouse_manager']
+           : docType == 'GRN'     ? ['qc_inspector', 'warehouse_manager']
            : docType == 'PR'      ? ['warehouse_manager', 'purchase_officer']
            : docType == 'PO'      ? ['warehouse_manager', 'finance_manager']
            : docType == 'QC'      ? ['qc_inspector', 'warehouse_manager']
@@ -227,7 +239,10 @@ service cloud.firestore {
            : [];
     }
     function completeRoles(docType) {
-      return docType == 'GRN'     ? ['storekeeper', 'warehouse_manager']
+      return docType == 'PRO'     ? ['executive_chef', 'warehouse_manager']
+           : docType == 'MIS'     ? ['storekeeper', 'warehouse_manager']
+           : docType == 'PRC'     ? ['storekeeper', 'warehouse_manager']
+           : docType == 'GRN'     ? ['storekeeper', 'warehouse_manager']
            : docType == 'PR'      ? ['purchase_officer', 'warehouse_manager']
            : docType == 'PO'      ? ['purchase_officer', 'warehouse_manager']
            : docType == 'QC'      ? ['qc_inspector', 'warehouse_manager']
@@ -703,6 +718,22 @@ service cloud.firestore {
       allow write: if isManager();
     }
 
+    // ── سيّد مواقع التخزين داخل المستودع (LOC-101 · ل‑١) ──────────
+    // المعرّف **هو** الكود الكامل `MAIN-A01-R01-B09-LF-P01`، فالكتابة الثانية
+    // على الكود نفسه تحديثٌ لا تكرار، ولا يوجد موقعان بكودٍ واحد بحكم البنية.
+    // القراءة لأي مصادَق: التخزين والسحب والجرد كلّها تحتاج معرفة المواقع، ومن
+    // يُمنع من رؤيتها يكتب `bin` نصًّا حرًّا فتعود الفجوة من بابها.
+    // الكتابة للمديرَين فقط — تعريف بنية المستودع قرارٌ إداريّ لا عمليّة يوميّة.
+    // ⚠️ `isManager()` هنا يجب أن يطابق `LOCATIONS_ROLES` في
+    // `src/services/locations/locationsService.js` (درسُ ل‑١٨).
+    // لا حذف: حركاتٌ ماضية تشير إلى الموقع، ومحوُه يقطع أثرها — الخروج من
+    // الخدمة يكون بـ`status:'archived'` لا بالمحو.
+    match /bin_locations/{code} {
+      allow read: if signedIn();
+      allow create, update: if isManager();
+      allow delete: if false;
+    }
+
     // ── الأرصدة (كمية لكل صنف×مخزن×تشغيلة) ───────────────────────
     // القراءة لأي مصادَق (الجرد والمستندات تحتاج معرفة الرصيد). الكتابة:
     //   · المديرَان — للاستيراد الافتتاحي وتصحيح استثنائي.
@@ -716,10 +747,22 @@ service cloud.firestore {
       // كميّةٍ سالبة أو غير رقميّة مباشرةً. ⚠️ التحقّق الكامل (الرصيد = مجموع
       // stock_moves) يستحيل في القواعد (لا تجميع) ويحتاج مسارًا موثوقًا
       // (Cloud Function على Blaze) — موثّق في خطة التطوير، البند ٢.
+      // ⚠️ **حدٌّ غير مُتحقَّق منه:** سلوك هذا الحارس مع `increment()` لم
+      // يُختبر — هل يرى `request.resource.data.qty` نتيجةَ الزيادة رقمًا
+      // (فيُفرض عدم السالب على الرصيد الناتج) أم السنتينل (فيسقط الشرط)؟
+      // الحسم يحتاج محاكي القواعد، وJava غير مثبَّتة على هذا الجهاز. لا
+      // يُدَّعى أنّه يعمل ولا أنّه معطَّل حتى يُختبر. والحارس الفعليّ اليوم
+      // هو `findNegativeBalance` داخل معاملة القيد (movements.js) وهو مُختبَر.
+      // ‹LOC-109 · ل‑١٧› و`qtyReserved` كان **بلا أيّ حارس**: يستطيع فاعلٌ
+      // مخزنيّ كتابة محجوزٍ سالب فيصير المتاح (qty − qtyReserved) أكبر من
+      // الموجود، فيُباع ما لا يوجد. الآن يُحرَس كما تُحرَس الكمية.
       allow write: if (isStockActor() || isVanSalesWriter())
                    && (!('qty' in request.resource.data)
                        || (request.resource.data.qty is number
-                           && request.resource.data.qty >= 0));
+                           && request.resource.data.qty >= 0))
+                   && (!('qtyReserved' in request.resource.data)
+                       || (request.resource.data.qtyReserved is number
+                           && request.resource.data.qtyReserved >= 0));
       allow delete: if false;
     }
 
@@ -734,6 +777,11 @@ service cloud.firestore {
                     && request.resource.data.postedByUid == request.auth.uid;
       // السماح بالكتابة على نفس المعرّف الحتمي (إعادة محاولة القيد الذرّي)
       // شرط بقاء الهوية والمستند والكمية كما هي — لا تحوير لحركةٍ قُيّدت.
+      // ‹LOC-109 · ل‑١٧› الدفعة والصلاحية والموقع كانت **غير محميّة**: يستطيع
+      // فاعلٌ مخزنيّ إعادة كتابة حركةٍ قُيّدت بتغيير تشغيلتها أو صلاحيتها أو
+      // رفّها مع بقاء الكمية والاتجاه، فينتقل الرصيد من مفتاحٍ إلى مفتاح بلا
+      // أثرٍ في التدقيق. وهي اليوم أبعادٌ في مفتاح الرصيد (LOC-108) فصار
+      // تحويرها تحويرًا للرصيد نفسه.
       allow update: if (isStockActor() || isVanSalesWriter())
                     && request.resource.data.docId == resource.data.docId
                     && request.resource.data.lineIndex == resource.data.lineIndex
@@ -741,7 +789,31 @@ service cloud.firestore {
                     && request.resource.data.sku == resource.data.sku
                     && request.resource.data.barcode == resource.data.barcode
                     && request.resource.data.from == resource.data.from
-                    && request.resource.data.to == resource.data.to;
+                    && request.resource.data.to == resource.data.to
+                    && request.resource.data.batch == resource.data.batch
+                    && request.resource.data.expiry == resource.data.expiry
+                    && request.resource.data.get('bin', '') == resource.data.get('bin', '')
+                    && request.resource.data.get('fromBin', '') == resource.data.get('fromBin', '')
+                    && request.resource.data.get('toBin', '') == resource.data.get('toBin', '')
+                    && request.resource.data.get('stockStatus', 'OK') == resource.data.get('stockStatus', 'OK');
+      allow delete: if false;
+    }
+
+    // ── سجلّ الاستيراد من نظامٍ خارجيّ (LOC-202 · إكسل) ───────────
+    // البوابة لا تتّصل بأيّ نظام؛ الشيت هو المدخل الوحيد. والاسم **محايد**
+    // (`source_imports` لا `odoo_imports`) لأنّ العقد لا يُربط بمورّدٍ بعينه.
+    // المعرّف حتميّ من بصمة (مرجع المستند × معرّف السطر × تاريخ المصدر)، فاستيراد
+    // الملفّ نفسه مرّتين يكتب فوق نفسه ولا يضاعف مخزونًا — منعٌ **بنيويّ** لا فحصٌ
+    // يُنسى. ملحقة-فقط بنمط `stock_moves`: لا حذف، والتعديل لا يغيّر الهويّة.
+    // وهويّة المستورِد من الحساب المسجَّل لا من الشيت (قرار المالك 2026-08-16).
+    match /source_imports/{importId} {
+      allow read: if signedIn();
+      allow create: if isStockActor()
+                    && request.resource.data.importedByUid == request.auth.uid;
+      allow update: if isStockActor()
+                    && request.resource.data.fingerprint == resource.data.fingerprint
+                    && request.resource.data.docRef == resource.data.docRef
+                    && request.resource.data.kind == resource.data.kind;
       allow delete: if false;
     }
 
@@ -826,6 +898,46 @@ service cloud.firestore {
       match /events/{eventId} {
         allow read: if signedIn();
         allow create: if isFleetWriter()
+                      && request.resource.data.byUid == request.auth.uid;
+        allow update, delete: if false;
+      }
+    }
+
+    // ── الساحة والأبواب ‹EXE-601/602› — المنطقة بين النقل والمخزن ───────
+    //
+    // ★★ الأبواب **بياناتٌ يضيفها المدير** (قرار المالك ت-O04 · 2026-08-17):
+    // لا بابَ مرسومٌ في الكود، والكتابة للمديرَين وحدهما لأنّها بياناتٌ سيّدة
+    // كماستر الأصناف. والإخراج من الخدمة `active:false` **حالةٌ لا حذف** —
+    // بابٌ محذوفٌ يجعل زياراتٍ قديمة تُشير إلى رمزٍ لا وجود له.
+    match /doors/{doorCode} {
+      allow read:           if signedIn();
+      allow create, update: if isManager();
+      allow delete:         if false;
+    }
+
+    // زيارات الساحة: ضابط البوابة يفتحها ويُخرجها، ومشرف المناولة يُسنِد
+    // البابَ ويُنهي المناولة. والقاعدة **بوّابةُ مستخدمين لا حاكم**: الدورة
+    // العشر وحرّاسها (لا خروج بلا تصريح · لا قفز بين المراحل · لا بابَ
+    // لاثنتين) كلّها في `fleet/yardModel.js` المختبَر لا هنا.
+    function isYardWriter() {
+      return isBootstrapAdmin() ||
+             (signedIn() && hasProfile() && isActive() &&
+              myRole() in ['admin', 'warehouse_manager', 'gate_officer', 'labor_supervisor', 'fleet']);
+    }
+
+    match /yard_visits/{visitId} {
+      allow read:   if signedIn();
+      allow create: if isYardWriter()
+                    && request.resource.data.createdByUid == request.auth.uid;
+      allow update: if isYardWriter()
+                    // الأصل لا يُزوَّر بعد الفتح — نمط `originKept` في المهامّ.
+                    && request.resource.data.createdByUid == resource.data.createdByUid;
+      allow delete: if false; // الزيارة الخاطئة تُلغى بسببٍ وتبقى أثرًا.
+
+      // سجلّ التدقيق: إضافة فقط باسم فاعلها (نمط trips/events).
+      match /events/{eventId} {
+        allow read:   if signedIn();
+        allow create: if isYardWriter()
                       && request.resource.data.byUid == request.auth.uid;
         allow update, delete: if false;
       }
@@ -1050,6 +1162,27 @@ service cloud.firestore {
 
     // مهام المناولة — سجلٌّ زمنيٌّ ملحق-فقط (لا حذف). البدء/الإيقاف/الإنهاء
     // يختم الأوقات على الخادم (serverTimestamp). الأحداث مجموعةٌ فرعيّة ملحق-فقط.
+    // ‹EXE-201› سجلّ الاستثناءات — الاختلاف يصير حالةً تُتتبَّع وتُغلق بدليل.
+    //
+    // ★ هذه القاعدة **حارسُ صلاحيّةٍ لا حارسُ قاعدة عمل**: تمنع *من لا يملك*،
+    // ولا تحكم *ما لا يصحّ*. فمسار الحالات وحكم الإغلاق واشتراط القرار المكتوب
+    // كلّها في `services/ledger/exceptions.js` الخالص — القاعدة مخزنٌ لا حاكم
+    // (قرار المالك 2026-08-16).
+    //
+    // يقرأ كلّ مصادَق: الاستثناء عملٌ مشترك، ومن لا يراه لا يعالجه.
+    // ويكتب الفاعلون المخزنيون والمديرون. ولا حذف — سجلٌّ يُمحى لا قيمة له،
+    // والتصحيح استثناءٌ جديد يشير إلى الأوّل (`correctsRef`).
+    match /exceptions/{exceptionId} {
+      allow read:           if signedIn();
+      allow create, update: if isStockActor() || isManager();
+      allow delete:         if false;
+      match /events/{eventId} {
+        allow read:   if signedIn();
+        allow create: if (isStockActor() || isManager()) && request.resource.data.byUid == request.auth.uid;
+        allow update, delete: if false;
+      }
+    }
+
     match /labor_tasks/{taskId} {
       allow read:          if signedIn();
       allow create, update: if isLaborWriter();
@@ -1085,7 +1218,23 @@ service cloud.firestore {
     // في طلبٍ يحتاج قائمتها. والكتابة للمديرَين — الهيكل قرارٌ إداريّ لا تشغيليّ.
     // **لا حذف:** موقعٌ حُمِّلت عليه تكلفةٌ تاريخيّة يُعطَّل ولا يُمحى، وإلّا
     // تحوّلت تكلفةٌ حقيقيّة إلى «غير مربوط» في تقارير الأمس.
+    // ‹FNB-107› مدير القطاع صاحبُ المدخل: يكتب شجرته (البراندات والفروع)
+    // كما تكتبها الشاشة — مطابقةٌ حرفيّة لأدوارها (درس ل‑١٨: قاعدةٌ أضيق
+    // من الشاشة تعني زرًّا يعمل ثمّ يُرفض حيًّا).
     match /org_locations/{code} {
+      allow read: if signedIn();
+      allow create, update: if isManager() || isFnbManager();
+      allow delete: if false;
+    }
+
+    // ═══ الوصفات ‹FNB-501› — `recipes` ═══
+    // الطبقة الثالثة من نموذج الأصناف: مخرَجٌ (صنف بيعٍ أو نصف مصنَّع) ومكوّناته.
+    // **نسخٌ لا تعديل:** المعرّف `SKU@vN` والحفظ نسخةٌ جديدة تشير لسابقتها —
+    // فتاريخ الاستهلاك يُفسَّر بوصفة يومه لا بوصفة اليوم. القراءة لكلّ مسجَّل
+    // (الانفجار والاستهلاك النظريّ يحتاجانها)، والكتابة للمديرَين — وملكيّة
+    // ‹FNB-502› `executive_chef` أُضيف بالسلوك الافتراضيّ المعلَن لق-O05.
+    // القاعدة حارسُ صلاحيّةٍ لا قاعدة عمل: التحقّق والترقيم في recipe.js.
+    match /recipes/{versionId} {
       allow read: if signedIn();
       allow create, update: if isManager();
       allow delete: if false;

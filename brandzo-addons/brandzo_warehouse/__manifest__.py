@@ -25,7 +25,7 @@ Brandzo Warehouse
 القرارات المعمارية موثّقة في ``ODOO_BACKEND_DEVELOPMENT_PLAN.md`` بجذر المستودع.
 """,
     'author': 'Brandzo HUB',
-    'website': 'https://github.com/albarshi996/warehouse-system',
+    'website': 'https://github.com/warehouse-art/brand-zo-hub',
     'license': 'LGPL-3',
 
     # التبعيات المؤكَّدة من فحص المصدر (كلها حاضرة في Odoo 19 Community).

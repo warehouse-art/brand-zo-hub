@@ -27,7 +27,7 @@
  */
 import { SYSTEM_LOCATIONS, EXTERNAL } from './locations.js';
 
-const { RECEIVING, QUARANTINE, STAGING, TRANSIT, SCRAP, ADJUSTMENT, RETURNS } = SYSTEM_LOCATIONS;
+const { RECEIVING, QUARANTINE, STAGING, TRANSIT, SCRAP, ADJUSTMENT, RETURNS, PRODUCTION } = SYSTEM_LOCATIONS;
 
 /**
  * رموز المستودعات المقروءة من رأس المستند وقت التنفيذ (لا مواقع نظامٍ ثابتة).
@@ -119,6 +119,29 @@ export const POSTING_RULES = {
     reason: 'quality-reject',
     labelAr: 'عزل مرفوض جودةً',
   },
+  // ‹FNB-502› الإنتاج بحلقتين: الموادّ تخرج من الرفّ إلى موقع الإنتاج
+  // الوسيط، والمنتَج يخرج منه إلى الرفّ — فيعود الوسيط إلى الصفر
+  // (`mustZero`). ورصيدٌ باقٍ فيه = دفعةٌ لم تُغلق.
+  MIS: {
+    from: WAREHOUSE,
+    to: PRODUCTION.code,
+    qtyField: 'qtyIssued',
+    expiryField: 'expiry',
+    costField: 'unitCost',
+    reason: 'material-issue',
+    labelAr: 'صرف موادّ للإنتاج',
+    binSide: 'from',
+  },
+  PRC: {
+    from: PRODUCTION.code,
+    to: WAREHOUSE,
+    qtyField: 'qtyProduced',
+    expiryField: 'expiry',
+    costField: 'unitCost',
+    reason: 'production-receipt',
+    labelAr: 'استلام إنتاج',
+    binSide: 'to',
+  },
   PUTAWAY: {
     from: RECEIVING.code,
     to: WAREHOUSE,
@@ -127,6 +150,11 @@ export const POSTING_RULES = {
     costField: 'unitPrice',
     reason: 'putaway',
     labelAr: 'تخزين على الرفّ',
+    // ‹LOC-105› أيّ طرفٍ يخصّه موقعُ البند؟ التخزين يضع البضاعة **على** رفّ،
+    // فالموقع وجهةٌ. والسحب يأخذها **من** رفّ، فالموقع مصدر. وبلا هذا التمييز
+    // يستحيل قلبُ مفتاح الرصيد: يقيّد التخزين على مفتاحٍ بموقع ويخصم السحب من
+    // مفتاحٍ بلا موقع، فتتباعد الأرصدة ويرفض حارس السالب سحبًا صحيحًا.
+    binSide: 'to',
   },
   PICK: {
     from: WAREHOUSE,
@@ -136,6 +164,7 @@ export const POSTING_RULES = {
     costField: 'unitPrice',
     reason: 'pick',
     labelAr: 'سحب للتجهيز',
+    binSide: 'from',
   },
   // ═══ الصرف عبر المركبة (قرار المالك 2026-08-04) ═══
   // إذن التسليم **يُحمّل** الطلب في مركبةٍ بعينها (ساحة التجهيز ← موقع المركبة)،
@@ -195,6 +224,10 @@ export const POSTING_RULES = {
     reason: 'adjustment',
     labelAr: 'تسوية جرد',
     signed: true,
+    // ‹LOC-105› الموقع يخصّ طرف **المستودع** لا طرف حساب التسوية. والقاعدة
+    // `signed` تقلب الطرفين عند العجز، فيُقلب معهما — الفائض يدخل الرفّ
+    // والعجز يخرج منه، والرفّ هو هو في الحالين.
+    binSide: 'to',
     // الفارق لا يُكتب بل يُحسب: الفعلي المعدود ناقص الدفتري.
     computeQty: (line) => (Number(line?.actualQty) || 0) - (Number(line?.bookQty) || 0),
   },

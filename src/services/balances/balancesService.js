@@ -8,8 +8,18 @@
  *   sku · barcode · nameAr · warehouse · location · batch · expiry
  *   qty · unitCost · countDate · updatedAt
  *
- * الصلاحية: للمديرَين (isManager) — كتابةً؛ القراءة لأي مصادَق (الجرد
- * والمستندات تحتاج معرفة الرصيد). تُطابق firestore.rules.
+ * ═══ الصلاحية — ولماذا لا تُطابق القواعد عمدًا (ل‑١٨) ═══
+ *
+ * كان مكتوبًا هنا «تُطابق firestore.rules» وهو **غير دقيق**: القاعدة تسمح
+ * بالكتابة على `balances` لاثني عشر دورًا (`isStockActor() || isVanSalesWriter()`)
+ * لأنّ **قيد المستند** يزيد الرصيد وينقصه ذرّيًّا، ومن يُنجز قائمة سحبٍ قد
+ * يكون أمين مخزنٍ لا مديرًا.
+ *
+ * و`BALANCES_ROLES` أضيق منها عمدًا: هي صلاحية **الاستيراد اليدويّ** من إكسل
+ * — فعلٌ يدهس أرصدةً بملفٍّ محفوظ، ولا يجوز إلا للمديرَين. فالفرق ليس تناقضًا
+ * بل فعلان مختلفان: القاعدة تحرس **القيد**، وهذه تحرس **الدهس**.
+ *
+ * والقراءة لأيّ مصادَق (الجرد والمستندات تحتاج معرفة الرصيد).
  */
 import {
   collection,
@@ -25,6 +35,7 @@ import { db } from '../../config/firebase.js';
 import { importSheet } from '../excel/excelImport.js';
 import { balanceId } from './balanceKey.js';
 import { normalizeSku, normalizeBarcode } from '../itemService.js';
+import { normalizeLocationCode } from '../locations/locationCode.js';
 
 const COL = 'balances';
 const BATCH_LIMIT = 500;
@@ -143,7 +154,10 @@ export async function commitBalancesImport(analysis) {
           barcode: normalizeBarcode(data.barcode),
           nameAr: String(data.nameAr || '').trim(),
           warehouse: String(data.warehouse || '').trim(),
-          location: String(data.location || '').trim(),
+          // ‹LOC-106› حقلٌ واحد للموقع: `bin` — نفس ما يكتبه القيد المخزنيّ،
+          // بالصيغة القياسية نفسها. و`location` القديم **لا يُمحى** من صفوفٍ
+          // كُتبت قبل التوحيد؛ يقرؤه `balanceLocationCode` توافقًا رجعيًّا.
+          bin: normalizeLocationCode(data.bin ?? data.location),
           batch: String(data.batch || '').trim(),
           expiry: String(data.expiry || '').trim(),
           qty: Number(data.qty) || 0,

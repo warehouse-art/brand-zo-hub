@@ -11,15 +11,22 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import { subscribeAuth, fetchUserProfile } from '../../../services/auth/authService.js';
-import { listenOrgLocations, saveOrgLocation, setOrgLocationActive } from '../../../services/org/orgLocationsService.js';
+import { listenOrgLocations, saveOrgLocation, setOrgLocationActive, importOrgLocations, seedOrgLocations, saveBranchProfile } from '../../../services/org/orgLocationsService.js';
 import { subscribePartners } from '../../../services/partnerService.js';
 import { listenAllDocuments } from '../../../services/documents/documentsService.js';
 import {
   ORG_LEVELS, levelOf, indexLocations, locationProblems,
   internalBranchProblems, orgCodeOf, docAmountOf, costByLocation, unlinkedCost,
 } from '../../../services/org/orgLocations.js';
+import { planOrgImport, seedWarnings } from '../../../services/org/orgImport.js';
+import {
+  CONCEPT_TYPES, BRANCH_STATES, WEEK_DAYS, WEEK_DAY_LABELS,
+  shapeBranchProfile, profileGaps, profileCompleteness,
+} from '../../../services/org/branchProfile.js';
+import { importSheet } from '../../../services/excel/excelImport.js';
 
-const VIEWER_ROLES = ['admin', 'warehouse_manager', 'finance_manager'];
+// ‹FNB-107› مدير القطاع صاحبُ المدخل (البراندات والفروع) — يرى الشجرة ويُدخلها.
+const VIEWER_ROLES = ['admin', 'warehouse_manager', 'finance_manager', 'fnb_manager'];
 
 const input =
   'w-full bg-chip border border-line rounded-lg px-3 py-2 text-sm text-ink placeholder:text-gray-500 focus:outline-none focus:border-accent/60';
@@ -35,6 +42,12 @@ export default function OrgDimensions() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [busy, setBusy] = useState(false);
   const [flash, setFlash] = useState(null);
+  // ‹FNB-101› معاينة الغرس بالجملة: تُعرض قبل الكتابة، والقرار للمستخدم بعد أن يرى.
+  const [importPlan, setImportPlan] = useState(null);
+  const [importing, setImporting] = useState(false);
+  // ‹FNB-201› الملفّ التشغيليّ للفرع — يُفتح للفرع المختار وحده.
+  const [profileFor, setProfileFor] = useState(null);
+  const [profileForm, setProfileForm] = useState(null);
 
   useEffect(() => {
     const unsub = subscribeAuth(async (u) => {
@@ -59,6 +72,7 @@ export default function OrgDimensions() {
   const index = useMemo(() => indexLocations(locations), [locations]);
   const treeProblems = useMemo(() => locationProblems(locations), [locations]);
   const branchProblems = useMemo(() => internalBranchProblems(locations, customers), [locations, customers]);
+  const seedMix = useMemo(() => seedWarnings(locations), [locations]);
 
   /** التكلفة على الشجرة من المستندات الحاملة رمزًا. */
   const cost = useMemo(() => {
@@ -112,9 +126,83 @@ export default function OrgDimensions() {
     }
   }
 
+  /** ‹FNB-101› قراءة الشيت ← معاينة كاملة. لا كتابةَ هنا — المعاينة أوّلًا. */
+  async function previewImport(file) {
+    if (!file) return;
+    setFlash(null);
+    setImportPlan(null);
+    try {
+      const sheet = await importSheet(file, 'orgLocations');
+      if (!sheet.rows.length) {
+        setFlash({ kind: 'err', text: sheet.errors[0]?.message || 'الملف بلا صفوف صالحة.' });
+        return;
+      }
+      const plan = planOrgImport(sheet.rows, locations);
+      // أخطاء قراءة الشيت (أعمدة مفقودة/قيم فاسدة) تُضمّ لمشاكل الشجرة — رفضٌ واحد مقروء.
+      const sheetErrors = sheet.errors.map((e) => `سطر ${e.row}: ${e.message}`);
+      setImportPlan({ ...plan, ok: plan.ok && !sheetErrors.length, problems: [...sheetErrors, ...plan.problems] });
+    } catch (e) {
+      setFlash({ kind: 'err', text: e?.message || 'تعذّرت قراءة الملف.' });
+    }
+  }
+
+  /** الكتابة الذرّيّة — كاملًا أو لا شيء (العقد في importOrgLocations). */
+  async function commitImport() {
+    if (!importPlan?.ok || importing) return;
+    setImporting(true);
+    try {
+      const { written } = await importOrgLocations(importPlan.toWrite, locations, me);
+      setFlash({ kind: 'ok', text: `غُرست الشجرة: ${written} موقعًا (${importPlan.counts.created} جديدًا · ${importPlan.counts.updated} محدَّثًا).` });
+      setImportPlan(null);
+    } catch (e) {
+      setFlash({ kind: 'err', text: e?.message || 'تعذّر الغرس.' });
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  /** البذرة التجريبيّة (ق-O01) — تمرّ بنفس بوّابة الاستيراد. */
+  async function plantSeed() {
+    if (importing) return;
+    setImporting(true);
+    setFlash(null);
+    try {
+      const { written } = await seedOrgLocations(locations, me);
+      setFlash({ kind: 'ok', text: `غُرست البذرة التجريبيّة: ${written} مواقع بادئتها DEMO- — تُطفأ عند وصول شجرة المالك.` });
+    } catch (e) {
+      setFlash({ kind: 'err', text: e?.message || 'تعذّر غرس البذرة.' });
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  function openProfile(loc) {
+    setProfileFor(loc.code);
+    setProfileForm(shapeBranchProfile(loc.profile || {}));
+    setFlash(null);
+  }
+
+  async function commitProfile() {
+    if (!profileFor || busy) return;
+    setBusy(true);
+    try {
+      const loc = locations.find((l) => String(l.code).toUpperCase() === profileFor);
+      await saveBranchProfile(profileFor, profileForm, loc, me);
+      setFlash({ kind: 'ok', text: `حُفظ الملفّ التشغيليّ للفرع ${profileFor}.` });
+      setProfileFor(null);
+      setProfileForm(null);
+    } catch (e) {
+      setFlash({ kind: 'err', text: e?.message || 'تعذّر حفظ الملفّ.' });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const patchProfile = (key, value) => setProfileForm((f) => ({ ...f, [key]: value }));
+
   if (!ready) return <Muted>جارٍ التحقّق من الصلاحية…</Muted>;
   if (!me) return <Muted>سجّل الدخول لعرض هذه الشاشة.</Muted>;
-  if (!VIEWER_ROLES.includes(me.role)) return <Muted>هذه الشاشة للمديرَين والماليّ.</Muted>;
+  if (!VIEWER_ROLES.includes(me.role)) return <Muted>هذه الشاشة للمديرَين والماليّ ومدير القطاع.</Muted>;
 
   const counts = Object.fromEntries(ORG_LEVELS.map((l) => [l.id, locations.filter((x) => x.level === l.id).length]));
 
@@ -126,10 +214,10 @@ export default function OrgDimensions() {
         ))}
       </div>
 
-      {treeProblems.length || branchProblems.length ? (
+      {treeProblems.length || branchProblems.length || seedMix.length ? (
         <Section title="تدخّل الآن">
           <ul className="text-sm text-red-600 list-disc pr-5 space-y-1">
-            {[...treeProblems, ...branchProblems].map((p) => <li key={p}>{p}</li>)}
+            {[...treeProblems, ...branchProblems, ...seedMix].map((p) => <li key={p}>{p}</li>)}
           </ul>
         </Section>
       ) : null}
@@ -168,6 +256,129 @@ export default function OrgDimensions() {
         </p>
       </Section>
 
+      <Section title="غرس الشجرة بالجملة (Excel)">
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="rounded-lg border border-line bg-chip px-4 py-2 text-sm cursor-pointer hover:border-accent/60">
+            اختر ملفّ الشجرة…
+            <input type="file" accept=".xlsx,.xls,.csv" className="hidden"
+              onChange={(e) => { previewImport(e.target.files?.[0]); e.target.value = ''; }} />
+          </label>
+          {!locations.length ? (
+            <button type="button" disabled={importing} onClick={plantSeed}
+              className="rounded-lg border border-line px-4 py-2 text-sm text-ink-2 hover:border-accent/60 disabled:opacity-40">
+              {importing ? 'جارٍ الغرس…' : 'غرس بذرة تجريبيّة (DEMO-)'}
+            </button>
+          ) : null}
+          <span className="text-xs text-ink-2">
+            الأعمدة: الرمز · الاسم · المستوى (قطاع/براند/فرع/مركز تكلفة) · رمز الأب · المدينة —
+            والشجرة تُقبل كاملةً أو تُرفض كاملةً.
+          </span>
+        </div>
+
+        {importPlan ? (
+          <div className="mt-3 space-y-2">
+            <p className="text-sm">
+              قُرئ {importPlan.counts.read} صفًّا: <b>{importPlan.counts.created}</b> جديدًا ·{' '}
+              <b>{importPlan.counts.updated}</b> تحديثًا · <b className={importPlan.counts.rejected ? 'text-red-600' : ''}>{importPlan.counts.rejected}</b> مرفوضًا.
+            </p>
+            {importPlan.problems.length ? (
+              <ul className="text-sm text-red-600 list-disc pr-5 space-y-1 max-h-48 overflow-y-auto">
+                {importPlan.problems.slice(0, 30).map((p) => <li key={p}>{p}</li>)}
+                {importPlan.problems.length > 30 ? <li>… و{importPlan.problems.length - 30} أخرى.</li> : null}
+              </ul>
+            ) : null}
+            <div className="flex gap-3">
+              <button type="button" disabled={!importPlan.ok || importing} onClick={commitImport}
+                className="rounded-lg bg-accent hover:opacity-90 disabled:opacity-40 px-4 py-2 text-sm font-bold text-white">
+                {importing ? 'جارٍ الغرس…' : importPlan.ok ? `اغرس ${importPlan.counts.accepted} موقعًا` : 'الغرس ممنوع — أصلح الشيت أوّلًا'}
+              </button>
+              <button type="button" className="text-sm text-ink-2 underline" onClick={() => setImportPlan(null)}>إلغاء</button>
+            </div>
+          </div>
+        ) : null}
+      </Section>
+
+      {profileFor && profileForm ? (
+        <Section title={`الملفّ التشغيليّ للفرع ${profileFor}`}>
+          <div className="grid gap-3 md:grid-cols-3">
+            <label className="text-sm">المدينة
+              <input className={input} value={profileForm.city}
+                onChange={(e) => patchProfile('city', e.target.value)} />
+            </label>
+            <label className="text-sm">نوع النشاط
+              <select className={input} value={profileForm.concept}
+                onChange={(e) => patchProfile('concept', e.target.value)}>
+                <option value="">— اختر —</option>
+                {Object.values(CONCEPT_TYPES).map((c) => <option key={c.id} value={c.id}>{c.labelAr}</option>)}
+              </select>
+            </label>
+            <label className="text-sm">تاريخ الافتتاح
+              <input type="date" className={input} value={profileForm.openingDate}
+                onChange={(e) => patchProfile('openingDate', e.target.value)} />
+            </label>
+            <label className="text-sm">حالة الفرع
+              <select className={input} value={profileForm.state}
+                onChange={(e) => patchProfile('state', e.target.value)}>
+                {Object.values(BRANCH_STATES).map((st) => <option key={st.id} value={st.id}>{st.labelAr} — {st.hint}</option>)}
+              </select>
+            </label>
+            <label className="text-sm">الطاقة التشغيليّة (وجبات/يوم)
+              <input type="number" min="0" className={input} value={profileForm.coversPerDay || ''}
+                onChange={(e) => patchProfile('coversPerDay', Number(e.target.value))} />
+            </label>
+            <label className="text-sm">حجم المبيعات المتوقّع (يوميًّا)
+              <input type="number" min="0" className={input} value={profileForm.expectedDailySales || ''}
+                onChange={(e) => patchProfile('expectedDailySales', Number(e.target.value))} />
+            </label>
+            <label className="text-sm md:col-span-2">المنيو المعتمد (أكواد أصناف البيع، تفصلها فاصلة)
+              <input className={input} dir="ltr" value={(profileForm.menuSkus || []).join(', ')}
+                onChange={(e) => patchProfile('menuSkus', e.target.value.split(/[,\s]+/).filter(Boolean))} />
+            </label>
+            <label className="text-sm">مهلة التوريد (أيّام)
+              <input type="number" min="0" className={input} value={profileForm.leadDays || ''}
+                onChange={(e) => patchProfile('leadDays', Number(e.target.value))} />
+            </label>
+          </div>
+
+          <div className="mt-3">
+            <div className="text-sm mb-1">أيّام التوريد</div>
+            <div className="flex flex-wrap gap-2">
+              {WEEK_DAYS.map((d) => {
+                const on = (profileForm.supplyDays || []).includes(d);
+                return (
+                  <button key={d} type="button"
+                    onClick={() => patchProfile('supplyDays', on
+                      ? profileForm.supplyDays.filter((x) => x !== d)
+                      : [...(profileForm.supplyDays || []), d])}
+                    className={`rounded-lg border px-3 py-1 text-sm ${on ? 'border-accent text-accent' : 'border-line text-ink-2'}`}>
+                    {WEEK_DAY_LABELS[d]}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-xs text-ink-2 mt-1">بلا تقويمٍ: كلّ يومٍ صالح للتوريد — لا تعطيل.</p>
+          </div>
+
+          {profileGaps({ profile: profileForm }).length ? (
+            <ul className="text-xs text-ink-2 list-disc pr-5 mt-3 space-y-1">
+              {profileGaps({ profile: profileForm }).map((g) => <li key={g}>{g}</li>)}
+            </ul>
+          ) : null}
+
+          <div className="flex gap-3 mt-3">
+            <button type="button" disabled={busy} onClick={commitProfile}
+              className="rounded-lg bg-accent hover:opacity-90 disabled:opacity-40 px-4 py-2 text-sm font-bold text-white">
+              {busy ? 'جارٍ الحفظ…' : 'حفظ الملفّ'}
+            </button>
+            <button type="button" className="text-sm text-ink-2 underline"
+              onClick={() => { setProfileFor(null); setProfileForm(null); }}>إلغاء</button>
+          </div>
+          <p className="text-xs text-ink-2 mt-2">
+            الحدّ الأدنى وPar Level والأصناف المعتمَدة ومسار التوريد سياسةُ صنفٍ لا صفةَ فرع — تُبنى في FNB-202 وFNB-203.
+          </p>
+        </Section>
+      ) : null}
+
       <Section title="الشجرة">
         {!tree.length ? (
           <Muted>لا مواقع بعد — أضف القطاعات أوّلًا ثمّ انزل الشجرة.</Muted>
@@ -205,6 +416,11 @@ export default function OrgDimensions() {
                           onClick={() => setForm({ code: loc.code, nameAr: loc.nameAr || '', level: loc.level, parentCode: loc.parentCode || '' })}>
                           تعديل
                         </button>
+                        {loc.level === 'branch' ? (
+                          <button type="button" className="text-xs text-accent underline ms-3" onClick={() => openProfile(loc)}>
+                            الملفّ ({profileCompleteness(loc)}٪)
+                          </button>
+                        ) : null}
                       </td>
                     </tr>
                   );

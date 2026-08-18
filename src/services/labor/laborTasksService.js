@@ -22,7 +22,10 @@ import {
   increment,
 } from 'firebase/firestore';
 import { db, auth } from '../../config/firebase.js';
+import { delayReasonProblem } from './laborStandard.js';
 import { canTransitionTask } from './laborModel.js';
+import { generateTasks } from '../tasks/taskFactory.js';
+import { splitGenerated } from '../tasks/taskShape.js';
 
 const COL = 'labor_tasks';
 
@@ -53,7 +56,7 @@ export function listenLaborTasks(cb, onError) {
 }
 
 /** إنشاء مهمّة مناولة مربوطةٍ بأمرٍ تشغيليّ وفريق. */
-export async function createTask({ orderType, docRef, containerRef, crewId, note }, profile) {
+export async function createTask({ orderType, docRef, containerRef, crewId, note, lines, taskId }, profile) {
   const actor = whoami(profile);
   if (!orderType || !crewId) throw new Error('نوع الأمر والفريق مطلوبان.');
   const ref = await addDoc(collection(db, COL), {
@@ -62,6 +65,11 @@ export async function createTask({ orderType, docRef, containerRef, crewId, note
     containerRef: String(containerRef || '').trim(),
     crewId,
     note: String(note || '').trim(),
+    // ‹EXE-103› البنود تُولد هنا لا في البطاقة — هذا سجلّ التنفيذ، و
+    // `WorkerTaskPanel` يكتب `qtyDone` فيه منذ LOC-401. و`taskId` رابطٌ
+    // معاكس للبطاقة (معرّفٌ لا نسخة) يبقى فارغًا للمهامّ التي تُنشأ يدويًّا.
+    lines: Array.isArray(lines) ? lines : [],
+    taskId: String(taskId || '').trim(),
     state: 'pending',
     unitsHandled: 0,
     startedAt: null,
@@ -73,6 +81,56 @@ export async function createTask({ orderType, docRef, containerRef, crewId, note
   });
   await logEvent(ref.id, actor, 'created', { crewId, orderType });
   return ref.id;
+}
+
+/**
+ * ‹EXE-104› يُطلق مهامّ مستندٍ معتمَد إلى الميدان.
+ *
+ * **خدمةٌ تنفّذ ولا تقرّر**: القرار كلّه في `taskFactory.generateTasks` الخالص
+ * (أيّ رفٍّ يُقترح · كيف تُقسَّم على المناطق · ما النقص · ما المكرّر)، وهذه
+ * تكتب ما قرّره فقط.
+ *
+ * والمشرف هو من يُطلق لا النظام — وهو السلوك المعلَن لقرار المالك ت-O01 حتى
+ * يُحسم: «النظام يقترح والمشرف يُطلق».
+ *
+ * والتكرار محسومٌ بالمفتاح: المهامّ المولَّدة من هذا المستند تُقرأ أوّلًا
+ * وتُمرَّر `existingKeys`، فإعادة الإطلاق لا تُنتج نسخةً ثانية.
+ *
+ * @returns {{created:string[], skipped:string[], shortages:Array, problem:string}}
+ */
+export async function releaseDocumentTasks(doc, { crewId, existing = [], ...options } = {}, profile) {
+  const actor = whoami(profile);
+  if (!crewId) throw new Error('اختر الفريق المنفّذ أوّلًا.');
+
+  const existingKeys = (existing || []).map((t) => t?.workKey).filter(Boolean);
+  const { tasks, shortages, skipped, problem } = generateTasks(doc, { ...options, existingKeys });
+  if (problem) throw new Error(problem);
+
+  const created = [];
+  for (const t of tasks) {
+    const { execution } = splitGenerated(t);
+    const ref = await addDoc(collection(db, COL), {
+      orderType: execution.orderType,
+      docRef: execution.docRef,
+      containerRef: '',
+      crewId,
+      note: t.title,
+      lines: execution.lines,
+      taskId: '',
+      workKey: t.key,
+      state: 'pending',
+      unitsHandled: 0,
+      startedAt: null,
+      finishedAt: null,
+      pauseStartedAt: null,
+      pausedMs: 0,
+      createdAt: serverTimestamp(),
+      ...actor,
+    });
+    await logEvent(ref.id, actor, 'created', { crewId, orderType: execution.orderType, workKey: t.key });
+    created.push(ref.id);
+  }
+  return { created, skipped, shortages, problem: '' };
 }
 
 /** بدء المهمّة — يختم وقت البدء على الخادم. */
@@ -106,9 +164,83 @@ export async function finishTask(task, unitsHandled, profile) {
   await logEvent(task.id, whoami(profile), 'finished', { unitsHandled: units });
 }
 
+/**
+ * يسجّل **سبب تأخير** المهمّة ‹EXE-702 · يسدّ ف ت‑١٣›.
+ *
+ * ★ ولماذا يسجّله العامل لا المشرف؟ لأنّه هو من رأى العطل. وبلا هذا الحقل
+ * يحمّل أيّ قياسٍ لاحق العاملَ عطلَ جهازٍ أو ازدحامَ ممرٍّ أو انتظارَ رافعة —
+ * فيتعلّم أن يُخفي التعثّر بدل أن يُبلّغ عنه، وتفقد الإدارة الإشارة نفسها.
+ *
+ * والسبب **مقيَّدٌ** بالسجلّ الموحَّد (`reasonCodes.task_delay`): نصٌّ حرٌّ لا
+ * يُجمَع منه تقرير. والحارس هنا استدعاءٌ لا نسخة.
+ */
+export async function recordDelayReason(task, { id, note = '' }, profile) {
+  const verdict = delayReasonProblem({ id, note });
+  if (!verdict.ok) throw new Error(verdict.problem);
+  await updateDoc(doc(db, COL, task.id), {
+    delayReason: { id, note: String(note || '').trim(), atMs: Date.now() },
+  });
+  await logEvent(task.id, whoami(profile), 'delay_reason', { reasonId: id });
+}
+
 /** إلغاء مهمّةٍ لم تبدأ بعد. */
 export async function cancelTask(task, profile) {
   if (!canTransitionTask(task.state, 'cancelled')) throw new Error('لا يمكن إلغاء مهمّةٍ بدأت.');
   await updateDoc(doc(db, COL, task.id), { state: 'cancelled' });
   await logEvent(task.id, whoami(profile), 'cancelled');
+}
+
+/**
+ * ═══ مهامّ التخزين والسحب — تُنفَّذ بندًا بندًا (LOC-402) ═══
+ */
+
+/**
+ * يحفظ بنود المهمّة بعد كلّ مسح، ويُقيّد المسح **حدثًا ملحقًا** في `events`.
+ *
+ * الحفظ بعد كلّ مسحة لا في آخر المهمّة: العامل قد ينقطع اتصاله أو ينتهي دوامه
+ * أو يسقط هاتفه — وما مُسح فعلًا لا يجوز أن يضيع لأنّ المهمّة لم تُغلق.
+ *
+ * والتجاوز يُقيَّد بحكم النظام وسبب المخالف معًا (قرار المالك LOC-O12)، فيقرأ
+ * المدير لاحقًا **لماذا** لا **ماذا** فقط.
+ */
+export async function saveTaskLines(task, lines, profile, entry = null) {
+  await updateDoc(doc(db, COL, task.id), {
+    lines,
+    updatedAt: serverTimestamp(),
+    ...(task.state === 'pending' ? { state: 'in_progress', startedAt: serverTimestamp() } : {}),
+  });
+  if (entry) {
+    await logEvent(task.id, whoami(profile), entry.override ? 'scan-override' : 'scan', {
+      locationCode: entry.locationCode,
+      sku: entry.sku,
+      batch: entry.batch,
+      qty: entry.qty,
+      ...(entry.override ? { systemVerdict: entry.overrideReason, note: entry.overrideNote } : {}),
+    });
+  }
+}
+
+/**
+ * إنهاء مهمّةٍ بندِيّة بحكم `finishVerdict`.
+ *
+ * ★★ **الإنجاز الجزئيّ لا يُغلقها**: الحكم يُعيد `paused` ما بقي متبقٍّ، فلا
+ * يظنّ أحدٌ أنّ الشحنة خُزّنت كاملة. والوحدات المناوَلة تُحسب من البنود لا
+ * تُكتب بيد.
+ */
+export async function finishLineTask(task, verdict, lines, profile) {
+  const units = (lines || []).reduce((s, l) => s + (Number(l.qtyDone) || 0), 0);
+  const patch = { lines, unitsHandled: units, updatedAt: serverTimestamp() };
+
+  if (verdict.nextState === 'done') {
+    if (!canTransitionTask(task.state, 'done')) throw new Error('لا يمكن إنهاء المهمّة من حالتها الحاليّة.');
+    Object.assign(patch, { state: 'done', finishedAt: serverTimestamp() });
+  } else if (task.state === 'in_progress') {
+    Object.assign(patch, { state: 'paused', pauseStartedAt: Date.now() });
+  }
+
+  await updateDoc(doc(db, COL, task.id), patch);
+  await logEvent(task.id, whoami(profile), verdict.partial ? 'partial-finish' : 'finished', {
+    unitsHandled: units,
+    remaining: (lines || []).reduce((s, l) => s + Math.max(0, (Number(l.qtyRequired) || 0) - (Number(l.qtyDone) || 0)), 0),
+  });
 }

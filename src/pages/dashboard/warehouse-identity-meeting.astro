@@ -1,0 +1,25 @@
+---
+/**
+ * «الهوية التشغيلية للمستودعات» — عرض الجلسة المشتركة: السلاسل × التسويق.
+ *
+ * ⚠️ لا محتوى مؤلَّفًا هنا: **المعروض هو تقرير التسويق نفسه**
+ * (`public/warehouse-identity/report.html` · ٢٦ قسمًا · ٤٤٢ بطاقة نموذج
+ * مرسومةً بـSVG)، يُفتح داخل إطارٍ من نفس الأصل ويُظهر العرضُ قسمًا واحدًا
+ * في كلّ شريحة. فرسوم التسويق وأنماطه وهويّته تبقى كما صمّمها حرفيًّا،
+ * وللعرض ما يخصّه: تنقّلٌ وفهرسٌ وملء شاشة.
+ *
+ * وهذا استبدالٌ كامل لنسخةٍ سابقة كتبتُ فيها قراءتي للتقرير — رفضها المالك
+ * بحقّ: «الذي في هذا الملفّ هو العرض، لا تجوّد من عندك».
+ */
+import DashboardLayout from '../../layouts/DashboardLayout.astro';
+import WarehouseIdentityDeck from '../../components/identity-meeting/WarehouseIdentityDeck.jsx';
+import '../../styles/identity-meeting.css';
+
+const base = import.meta.env.BASE_URL.endsWith('/')
+  ? import.meta.env.BASE_URL.slice(0, -1)
+  : import.meta.env.BASE_URL;
+---
+
+<DashboardLayout title="الهوية التشغيلية للمستودعات" light>
+  <WarehouseIdentityDeck base={base} client:load />
+</DashboardLayout>

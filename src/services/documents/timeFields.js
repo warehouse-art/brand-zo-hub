@@ -82,17 +82,32 @@ export const TIME_FIELD_MAP = Object.freeze({
   /* ═══ الوارد ═══ */
   PR: { requestDate: E, neededBy: P },
   PO: { issueDate: E, requiredDelivery: P },
-  GRN: { receivedAt: E, expiryDate: A },
-  QC: { inspectionDate: E, expiry: A },
-  PUTAWAY: { putawayDate: E, expiry: A },
+  // ‹FNB-405› `mfgDate` **صفةُ دفعةٍ** كالصلاحيّة لا ختمُ واقعةٍ عندنا: تاريخُ
+  // إنتاجٍ وقع في مصنع المورّد قبل أن تصلنا البضاعة. فهو `attribute` — يُقبل
+  // في الماضي بطبيعته، ولا يُختم بزمن الاستلام فيكذب.
+  GRN: { receivedAt: E, expiryDate: A, mfgDate: A },
+  QC: { inspectionDate: E, expiry: A, mfgDate: A },
+  PUTAWAY: { putawayDate: E, expiry: A, mfgDate: A },
+
+  /* ═══ الإنتاج ‹FNB-502› ═══ */
+  // `productionDate` **موعدٌ مخطَّط** (متى يُنتَج) فيُقبل في المستقبل؛
+  // و`orderDate` و`issueDate` و`receivedAt` ختومُ وقائع؛ و`mfgDate`/`expiry`
+  // سمتا دفعةٍ كما في الوارد.
+  PRO: { orderDate: E, productionDate: P },
+  MIS: { issueDate: E, expiry: A },
+  PRC: { receivedAt: E, mfgDate: A, expiry: A },
 
   /* ═══ الصادر ═══ */
-  SO: { orderDate: E, requiredDate: P },
+  // ‹EXE-301› `mustShipBy` **قيدٌ تشغيليّ** (متى يُقفل استلام الناقل) لا وعدٌ
+  // للعميل — و`requiredDate` هو الوعد. وقد يبعد بينهما ساعات، والذي يقود عمل
+  // المخزن هو الأوّل. «مخطّط» لأنّه **موعدٌ متّفق عليه** لا ختمُ واقعة، فلا
+  // يُرفض لكونه في المستقبل.
+  SO: { orderDate: E, requiredDate: P, mustShipBy: P },
   // ⚠️ `orderDate` في أمر السحب تسميتُه «تاريخ الطلب» — أي تاريخ أمر البيع لا
   // تاريخ السحب. وجدول الاشتقاق `SO>PICK` لا ينقله، فيُكتب بيدٍ اليوم. صُنّف
   // «منقولًا» كي لا يُختم بزمن السحب فيعرض رقمًا كاذبًا. القرار الصحيح لاحقًا:
   // إمّا نقله آليًّا عند الاشتقاق أو تسميتُه باسم واقعته. (ينتظر إقرار المالك)
-  PICK: { orderDate: R, expiry: A },
+  PICK: { orderDate: R, expiry: A, mustShipBy: P },
   PACK: { issueDate: E },
   DN: { deliveryDate: E, expiry: A },
   POD: { deliveryDate: E, expiry: A },

@@ -18,7 +18,7 @@
 - **المهمة:** تحويل الدورة المستندية اللوجستية (12 مرحلة) إلى: **(أ) قيود صارمة** داخل موديول Odoo 19 حقيقي، و**(ب) محاكي تدريبي عالي الدقة** يعلّمها، داخل **بوابة عمليات رسمية**.
 - **تقسيم اللغات:** العقل المدبّر (Back-end) = **Python + XML** (موديول `brandzo_warehouse`) · الموقع (Front-end) = **JavaScript + Astro + Tailwind + React**.
 - **القاعدة الحاكمة للتطوير:** **صفر حذف** — فقط إعادة صياغة، وإنشاء، وإعادة توجيه.
-- **المستودع:** `albarshi996/warehouse-system` · فرع `main` · Remote: `https://github.com/albarshi996/warehouse-system.git` · يُنشر تلقائيًا إلى GitHub Pages: https://albarshi996.github.io/warehouse-system/
+- **المستودع:** `warehouse-art/brand-zo-hub` · فرع `main` · Remote: `https://github.com/warehouse-art/brand-zo-hub.git` · يُنشر تلقائيًا إلى GitHub Pages: https://warehouse-art.github.io/brand-zo-hub/
 - **🌐 النطاق الرسمي (أصل المشروع):** **`warehousehub.com.ly`** — مسجّل عبر **Libyan Spider** (2026-07-13، ينتهي 2027-06-30، 15 د.ل/سنة، فعّال). لوحة الإدارة عبر حساب Libyan Spider (الرابط محفوظ خاصًّا — لا يُنشر في مستودع عام) — **يُربَط بـ GitHub Pages** (انظر §8 ركيزة 4). حاليًّا Unlocked (يُنصَح بتفعيل Registrar Lock).
 - **منهج الرفع:** نطوّر خلال الجلسة، وعند «ارفع»/«خلصنا»: مزامنة main → build+lint → commit → push مباشر → مراقبة النشر.
 
@@ -242,7 +242,7 @@ warehouse-system/
 6. **تطبيق جوّال PWA بقارئ باركود** — للعمل الميداني (ركيزة 8).
 7. **لمسات احترافية:** وضع ليلي · استجابة للجوال · إشعارات · لوحات KPI عربية بالدينار الليبي.
 8. **🌐 ربط النطاق الرسمي `warehousehub.com.ly` بـ GitHub Pages:**
-   - **جانبي أنا (برمجي):** إضافة ملف `CNAME` يحوي `warehousehub.com.ly` + **تغيير `astro.config.mjs` من `base:'/warehouse-system'` إلى `base:'/'`** (فخّ مهم: مع النطاق المخصّص يُخدَم الموقع من الجذر لا من مسار فرعي، فتحديث المسار إلزامي وإلا تكسر الروابط).
+   - **جانبي أنا (برمجي):** إضافة ملف `CNAME` يحوي `warehousehub.com.ly` + **تغيير `astro.config.mjs` من `base:'/brand-zo-hub'` إلى `base:'/'`** (فخّ مهم: مع النطاق المخصّص يُخدَم الموقع من الجذر لا من مسار فرعي، فتحديث المسار إلزامي وإلا تكسر الروابط).
    - **جانبك أنت (في Libyan Spider — لا أدخله):** سجلّات DNS للنطاق الجذر → **A records** إلى عناوين GitHub Pages: `185.199.108.153` · `185.199.109.153` · `185.199.110.153` · `185.199.111.153` (وإن دعم AAAA، عناوين IPv6 الأربعة لـ Pages).
    - **بعدها:** إعدادات المستودع → Pages → Custom domain = النطاق → تفعيل **Enforce HTTPS**.
 

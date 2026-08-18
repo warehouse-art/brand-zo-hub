@@ -23,6 +23,8 @@ import {
   POSTING_STATE,
 } from './postingRules.js';
 import { vehicleLocationCode, customerLocationCode, isAccountLocation } from './locations.js';
+import { normalizeStockStatus } from './stockStatus.js';
+import { orgCodeOf, dimensionsOf } from '../org/orgLocations.js';
 import { isStocked, typeOf } from '../items/itemType.js';
 import { toBase, baseUomOf, hasUomDefinition, normalizeUom, checkFraction } from '../items/uomModel.js';
 
@@ -81,7 +83,7 @@ function resolveLocation(slot, header) {
  * @param {{items?: Map<string,object>|object}} [opts] خريطة `sku → سجلّ الصنف`
  * @returns {{moves: Array, problems: string[], skipped: Array}} الحركات والمشاكل وما استُبعد
  */
-export function buildMoves(docData, { items = null } = {}) {
+export function buildMoves(docData, { items = null, orgIndex = null } = {}) {
   const itemOf = (line) => {
     if (!items) return null;
     const sku = String(line?.sku ?? line?.itemCode ?? '').trim().toUpperCase();
@@ -100,6 +102,25 @@ export function buildMoves(docData, { items = null } = {}) {
     problems.push('المستودع غير محدَّد في رأس المستند — لا يُقيَّد أثرٌ بلا موقع.');
     return { moves: [], problems, skipped: [] };
   }
+
+  // ‹FNB-104› البُعد التنظيميّ يُختم **لحظة القيد** كما خُتم بُعد الرحلة
+  // والمندوب (CC-301) — لا يُحسب وقت العرض: موقعٌ يُعاد ربطه غدًا يجب ألّا
+  // يقلب تقارير الأمس. يُحسب مرّةً للمستند (الرأس واحد) ويُنسخ على حركاته.
+  // بلا فهرسٍ (المستدعي لم يمرّره أو فشلت قراءته) يُختم الرمز الخام وحده —
+  // فالختم الناقص المعلَن خيرٌ من اشتقاقٍ لاحقٍ متقلّب.
+  const rawOrgCode = String(orgCodeOf(docData) || '').trim().toUpperCase();
+  const orgDims = orgIndex ? dimensionsOf(orgIndex, docData) : null;
+  const orgStamp = {
+    orgCode: rawOrgCode,
+    ...(orgDims
+      ? {
+          orgMatched: orgDims.matched,
+          orgBranch: orgDims.branch?.code || '',
+          orgBrand: orgDims.brand?.code || '',
+          orgSector: orgDims.sector?.code || '',
+        }
+      : {}),
+  };
 
   const moves = [];
   const skipped = [];
@@ -167,6 +188,14 @@ export function buildMoves(docData, { items = null } = {}) {
     const unitCost = Number(line?.[rule.costField]) || 0;
     const absQty = Math.abs(qty);
 
+    // ‹LOC-105› الموقع طرفٌ لا صفة: تنسبه القاعدة إلى المصدر أو الوجهة، ويُقلب
+    // مع الطرفين عند التسوية السالبة. وبلا هذا التمييز يستحيل قلبُ مفتاح الرصيد.
+    const binValue = String(line?.bin ?? '').trim().toUpperCase();
+    const ruleFromBin = rule.binSide === 'from' ? binValue : '';
+    const ruleToBin = rule.binSide === 'to' ? binValue : '';
+    const fromBin = negative ? ruleToBin : ruleFromBin;
+    const toBin = negative ? ruleFromBin : ruleToBin;
+
     moves.push({
       id: moveId(docData.id, index),
       docId: docData.id,
@@ -183,7 +212,15 @@ export function buildMoves(docData, { items = null } = {}) {
       // الموقع التخزينيّ داخل المستودع (SAP-7 · ف‑١٨ · §14 ‹364›): يحمله بند
       // التخزين (PUTAWAY) فيعرفه الدفتر — «حسب الموقع التخزينيّ» مستوى عرضٍ
       // من الحركات، ومفتاح الرصيد لم يُمسّ عمدًا (تغييره يقلب FEFO والسحب).
-      bin: String(line?.bin ?? '').trim().toUpperCase(),
+      bin: binValue,
+      // ‹LOC-105› طرفا الموقع صريحان: من أيّ رفٍّ خرجت وإلى أيّ رفٍّ دخلت.
+      // `bin` يبقى للتوافق الرجعيّ (حركاتٌ قُيّدت قبل اليوم تحمله وحده).
+      fromBin,
+      toBin,
+      // حالة المخزون (LOC-107): بُعدٌ يصف ما يتعايش في الرفّ الواحد (سليم/تالف)
+      // ولا يُميّزه موقع. الغياب ⇒ `OK` ⇒ سلوك اليوم حرفيًّا. ولا يدخل مفتاح
+      // الرصيد بعد — قيمُه تنتظر اعتماد المالك (LOC-O02).
+      stockStatus: normalizeStockStatus(line?.stockStatus),
       qty: absQty,
       // الدفتر بوحدة الأساس، والعرض بوحدة الإدخال (م٣-ب). ولولا حفظ الأصل
       // لصار «٢٠ صندوقًا» في التقرير «٢٤٠» بلا أن يعرف أحدٌ أنّه هو نفسه.
@@ -199,6 +236,9 @@ export function buildMoves(docData, { items = null } = {}) {
       // الجواب من الدفتر عن «أيّ رحلةٍ حمّلت هذا الرصيد؟» — والفارغ يبقى فارغًا.
       tripRef: String(header?.tripRef ?? '').trim(),
       repName: String(header?.repName ?? header?.rep ?? '').trim(),
+      // ‹FNB-104› البُعد التنظيميّ مختومًا: القطاع والبراند والفرع من الشجرة
+      // وقت القيد — فيُجاب من الدفتر: «كم صُرف لهذا الفرع؟» بلا إعادة اشتقاق.
+      ...orgStamp,
     });
   });
 
@@ -220,7 +260,18 @@ export function balanceDeltas(moves) {
 
   const touch = (move, location, sign) => {
     if (location === null || location === undefined) return; // الخارج لا رصيد له
-    const id = balanceId({ sku: move.sku, barcode: move.barcode, warehouse: location, batch: move.batch });
+    // ‹LOC-105› لكلّ طرفٍ موقعُه: الداخل يدخل رفّ الوجهة، والخارج يخرج من رفّ
+    // المصدر. و`bin` القديم يُقرأ توافقًا لحركاتٍ قُيّدت قبل اليوم بلا طرفين.
+    const sideBin = sign > 0 ? move.toBin ?? move.bin ?? '' : move.fromBin ?? '';
+    const id = balanceId({
+      sku: move.sku,
+      barcode: move.barcode,
+      warehouse: location,
+      batch: move.batch,
+      bin: sideBin,
+      expiry: move.expiry,
+      status: move.stockStatus,
+    });
     if (!id) {
       problems.push(`تعذّر بناء مفتاح رصيد للصنف «${move.sku || move.barcode}» في «${location}».`);
       return;
@@ -241,7 +292,9 @@ export function balanceDeltas(moves) {
       unitCost: move.unitCost,
       // موقع الوجهة (ف‑١٨): الداخل إلى مستودعٍ بموقعٍ معلوم يُذكر موقعه على
       // الرصيد — آخرُ تخزينٍ يكسب، عرضًا لا مفتاحًا.
-      bin: sign > 0 ? move.bin || '' : '',
+      bin: sideBin || '',
+      // حالة المخزون تُحمَل على الرصيد (LOC-107) — حقلًا لا مفتاحًا بعد.
+      stockStatus: move.stockStatus || 'OK',
       delta: sign * move.qty,
     });
   };

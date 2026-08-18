@@ -14,8 +14,12 @@ import {
 import { db } from '../../../config/firebase.js';
 import Icon from '../../ui/Icon.jsx';
 import ListView from '../../odoo/ListView.jsx';
+import LocationTree from './LocationTree.jsx';
+import LocationMap from './LocationMap.jsx';
+import { subscribeAuth, fetchUserProfile } from '../../../services/auth/authService.js';
 import Badge from '../../odoo/Badge.jsx';
 import { int } from '../../odoo/format.js';
+import { FACILITY_TYPES, DEFAULT_FACILITY_TYPE, facilityTypeOf, facilityWarnings } from '../../../services/locations/facilityModel.js';
 
 /**
  * شاشة ماستر المستودعات — قائمة حيّة + إضافة/تعديل/حذف + تصدير/استيراد JSON،
@@ -33,18 +37,34 @@ const LIST_COLS = [
   { key: 'code', label: 'الكود' },
   { key: 'name', label: 'الاسم' },
   { key: 'manager', label: 'المدير' },
+  { key: 'facilityType', label: 'النوع' },
   { key: 'status', label: 'الحالة' },
   { key: 'actions', label: 'الإجراءات' },
 ];
 
 const WarehouseManager = () => {
+  // ‹LOC-102› تبويبان على الرابط نفسه: المنشآت ومواقع التخزين داخلها.
+  // لا صفحة فوق صفحة — المواقع تخصّ ماستر المستودعات.
+  const [tab, setTab] = useState('warehouses');
+  const [role, setRole] = useState('');
   const [warehouses, setWarehouses] = useState([]);
-  const [formData, setFormData] = useState({ code: '', name: '', manager: '' });
+  const [formData, setFormData] = useState({ code: '', name: '', manager: '', facilityType: DEFAULT_FACILITY_TYPE });
   const [editingId, setEditingId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [statusMsg, setStatusMsg] = useState({ type: '', text: '' });
   const [offlineMode, setOfflineMode] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+
+  // الدور يحكم تحرير المواقع (المديران) — والقراءة لأيّ مصادَق.
+  useEffect(
+    () =>
+      subscribeAuth(async (user) => {
+        if (!user) return setRole('');
+        const profile = await fetchUserProfile(user).catch(() => null);
+        setRole(profile?.role || '');
+      }),
+    []
+  );
 
   // Dispatch connection status
   const dispatchStatus = (isOnline) => {
@@ -126,6 +146,9 @@ const WarehouseManager = () => {
           code: formData.code,
           name: formData.name,
           manager: formData.manager,
+          // ‹FNB-106› نوع المنشأة: مستودعٌ أم وحدة إنتاج مركزيّة (المطبخ).
+          // الغياب ⇒ مستودع — سلوك اليوم حرفيًّا، فالترحيل بلا أثر.
+          facilityType: formData.facilityType || DEFAULT_FACILITY_TYPE,
           status: 'نشط',
           createdAt: serverTimestamp(),
         };
@@ -137,7 +160,7 @@ const WarehouseManager = () => {
         }
       }
 
-      setFormData({ code: '', name: '', manager: '' });
+      setFormData({ code: '', name: '', manager: '', facilityType: DEFAULT_FACILITY_TYPE });
       setEditingId(null);
       setStatusMsg({ type: 'success', text: editingId ? 'تم تعديل المستودع بنجاح' : 'تمت إضافة المستودع بنجاح' });
       setHasUnsavedChanges(false);
@@ -165,7 +188,7 @@ const WarehouseManager = () => {
 
   const startEdit = (wh) => {
     setEditingId(wh.id);
-    setFormData({ code: wh.code, name: wh.name, manager: wh.manager || '' });
+    setFormData({ code: wh.code, name: wh.name, manager: wh.manager || '', facilityType: facilityTypeOf(wh) });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -227,12 +250,20 @@ const WarehouseManager = () => {
   const activeCount = warehouses.filter((wh) => (wh.status || 'نشط') === 'نشط').length;
   const managedCount = warehouses.filter((wh) => wh.manager).length;
 
+  // ‹FNB-106› «مطبخٌ مركزيّ واحد يخدم الشبكة» — تنبيهٌ يُعلن التعدّد ولا يمنعه.
+  const facilityNotes = facilityWarnings(warehouses);
+
   const listRows = warehouses.map((wh) => ({
     id: wh.id,
     cells: {
       code: <span className="decoration-bf" style={{ fontFamily: 'monospace' }}>{wh.code}</span>,
       name: wh.name,
       manager: wh.manager || '—',
+      facilityType: (
+        <Badge variant={facilityTypeOf(wh) === 'production_unit' ? 'info' : 'muted'}>
+          {FACILITY_TYPES[facilityTypeOf(wh)].labelAr}
+        </Badge>
+      ),
       status: <Badge variant={(wh.status || 'نشط') === 'نشط' ? 'done' : 'danger'}>{wh.status || 'نشط'}</Badge>,
       actions: (
         <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
@@ -260,6 +291,39 @@ const WarehouseManager = () => {
       </div>
 
       <div className="o_ds">
+        <div role="tablist" aria-label="أقسام المستودعات" style={{ display: 'flex', gap: '6px', marginBottom: '14px', borderBottom: '1px solid var(--o-border-color)' }}>
+          {[
+            { id: 'warehouses', label: 'المستودعات', icon: 'package' },
+            { id: 'locations', label: 'مواقع التخزين', icon: 'mapPin' },
+            // ‹LOC-602› الخريطة تبويبٌ ثالث لا صفحةٌ ثانية: هي والشجرة عينان على
+            // البيانات نفسها — الشجرة تقول «ما تركيب المستودع؟» والخريطة تقول
+            // «أيّ رفٍّ يقبل الآن؟». ولو سكنتا رابطين لَافترق منطقاهما.
+            { id: 'map', label: 'خريطة المواقع', icon: 'map' },
+          ].map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              role="tab"
+              aria-selected={tab === t.id}
+              onClick={() => setTab(t.id)}
+              className="btn btn-link"
+              style={{
+                borderBottom: tab === t.id ? '2px solid var(--o-brand-primary)' : '2px solid transparent',
+                fontWeight: tab === t.id ? 700 : 500,
+                borderRadius: 0,
+              }}
+            >
+              <Icon name={t.icon} size={15} /> {t.label}
+            </button>
+          ))}
+        </div>
+
+        {tab === 'locations' && <LocationTree role={role} />}
+
+        {tab === 'map' && <LocationMap />}
+
+        {tab === 'warehouses' && (
+        <>
         <p style={{ fontSize: 'var(--o-font-size-sm)', color: 'var(--o-main-color-muted)', margin: '0 0 14px', lineHeight: 1.6 }}>
           كود المستودع (WH Code) هو المعرّف الفريد. عند انقطاع السحابة يعمل النظام محلّيًّا ثم يزامن لاحقًا.
         </p>
@@ -302,6 +366,17 @@ const WarehouseManager = () => {
                 required
               />
             </FieldWrap>
+            <FieldWrap label="نوع المنشأة">
+              <select
+                className="o_input"
+                value={formData.facilityType || DEFAULT_FACILITY_TYPE}
+                onChange={handleInputChange('facilityType')}
+              >
+                {Object.values(FACILITY_TYPES).map((t) => (
+                  <option key={t.id} value={t.id}>{t.labelAr} — {t.hint}</option>
+                ))}
+              </select>
+            </FieldWrap>
             <FieldWrap label="المدير المسؤول">
               <input
                 type="text"
@@ -317,7 +392,7 @@ const WarehouseManager = () => {
               <button
                 type="button"
                 className="btn btn-secondary"
-                onClick={() => { setEditingId(null); setFormData({ code: '', name: '', manager: '' }); }}
+                onClick={() => { setEditingId(null); setFormData({ code: '', name: '', manager: '', facilityType: DEFAULT_FACILITY_TYPE }); }}
               >
                 إلغاء
               </button>
@@ -354,9 +429,16 @@ const WarehouseManager = () => {
           ) : warehouses.length === 0 ? (
             <div className="o_dashboard_empty">لا توجد مستودعات مسجلة حالياً</div>
           ) : (
-            <ListView selectable={false} columns={LIST_COLS} rows={listRows} />
+            <>
+              {facilityNotes.map((note) => (
+                <div key={note} className="o_alert o_alert_warning" style={{ marginBottom: '8px' }}>{note}</div>
+              ))}
+              <ListView selectable={false} columns={LIST_COLS} rows={listRows} />
+            </>
           )}
         </div>
+        </>
+        )}
       </div>
     </div>
   );

@@ -13,4 +13,4 @@ compatibility_date = "2024-11-01"
 
 [vars]
 # The exact origin of the deployed frontend (GitHub Pages). No trailing slash.
-ALLOWED_ORIGIN = "https://albarshi996.github.io"
+ALLOWED_ORIGIN = "https://warehouse-art.github.io"

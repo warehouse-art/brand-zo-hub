@@ -8,6 +8,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  dispatchTargetVerdict, dispatchViolations, DISPATCH_DOC_TYPES,
+  rollupBy, orgEntriesFromMoves, rankByMeasure, ORG_MEASURES, costByLocation as costWrap,
   ORG_LEVELS,
   LEVEL_IDS,
   ORG_FIELDS,
@@ -217,4 +219,119 @@ test('مبلغ المستند: أوّل عمودٍ ماليّ يفوز ثمّ ك
   assert.equal(docAmountOf({ lines: [{ qty: 5, unitPrice: 4 }] }), 20);
   assert.equal(docAmountOf({ lines: [{ qty: 5, unitCost: 3 }] }), 15);
   assert.equal(docAmountOf({ lines: [{ qty: 5 }] }), 0, 'بلا مالٍ صفرٌ لا تخمين');
+});
+
+/* ═══════════ ‹FNB-103› لا يُصرف على وعاء ═══════════ */
+
+test('★ حكم الوجهة بالمستويات الأربعة: قطاعٌ وبراند يُرفضان · فرعٌ ومركز تكلفةٍ يمرّان', () => {
+  const index = indexLocations([
+    { code: 'FNB', nameAr: 'قطاع الأغذية', level: 'sector' },
+    { code: 'BRD1', nameAr: 'براند أول', level: 'brand', parentCode: 'FNB' },
+    { code: 'BR01', nameAr: 'فرع أول', level: 'branch', parentCode: 'BRD1' },
+    { code: 'BR02', nameAr: 'فرع مقفل', level: 'branch', parentCode: 'BRD1', active: false },
+    { code: 'CC01', nameAr: 'مطبخ الفرع', level: 'cost_center', parentCode: 'BR01' },
+  ]);
+  assert.equal(dispatchTargetVerdict(index, 'FNB').ok, false);
+  assert.equal(dispatchTargetVerdict(index, 'BRD1').ok, false);
+  assert.equal(dispatchTargetVerdict(index, 'BR01').ok, true);
+  assert.equal(dispatchTargetVerdict(index, 'CC01').ok, true);
+
+  // الرفض يقول الصواب ويقترح البديل — فروع الوعاء النشطة وحدها.
+  const v = dispatchTargetVerdict(index, 'BRD1');
+  assert.match(v.problem, /وعاء/);
+  assert.deepEqual(v.suggestions.map((s2) => s2.code), ['BR01']); // المقفل لا يُقترح.
+
+  // وغير المربوط يمرّ ويُوسَم — لا منعَ بجهلنا (عقد السيّد الاختياريّ).
+  assert.equal(dispatchTargetVerdict(index, 'GHOST-99').ok, true);
+});
+
+test('الحكم على مستندات الخروج وحدها: TRN وDN يُحكمان — وPO لا يُمسّ', () => {
+  const index = indexLocations([
+    { code: 'FNB', nameAr: 'قطاع', level: 'sector' },
+    { code: 'BRD1', nameAr: 'براند', level: 'brand', parentCode: 'FNB' },
+    { code: 'BR01', nameAr: 'فرع', level: 'branch', parentCode: 'BRD1' },
+  ]);
+  const doc = { header: { costCenter: 'FNB' } };
+  assert.deepEqual(DISPATCH_DOC_TYPES, ['DN', 'TRN']);
+  assert.equal(dispatchViolations('TRN', doc, index).length, 1);
+  assert.equal(dispatchViolations('DN', doc, index).length, 1);
+  assert.deepEqual(dispatchViolations('PO', doc, index), []); // الشراء ليس خروجًا لفرع.
+  // فرعٌ سليم يمرّ صامتًا، والفارغ لا يُحكم (الإلزام شأن المخطّط لا الحكم).
+  assert.deepEqual(dispatchViolations('TRN', { header: { costCenter: 'BR01' } }, index), []);
+  assert.deepEqual(dispatchViolations('TRN', { header: {} }, index), []);
+});
+
+/* ═══════════ ‹FNB-105› الصعود المعمَّم — محرّكٌ واحد للمقاييس كلّها ═══════════ */
+
+const ROLLUP_TREE = indexLocations([
+  { code: 'FNB', nameAr: 'قطاع', level: 'sector' },
+  { code: 'BRD1', nameAr: 'براند أ', level: 'brand', parentCode: 'FNB' },
+  { code: 'BRD2', nameAr: 'براند ب', level: 'brand', parentCode: 'FNB' },
+  { code: 'BR01', nameAr: 'فرع ١', level: 'branch', parentCode: 'BRD1' },
+  { code: 'BR02', nameAr: 'فرع ٢', level: 'branch', parentCode: 'BRD1' },
+  { code: 'BR03', nameAr: 'فرع ٣', level: 'branch', parentCode: 'BRD2' },
+]);
+
+test('★ مجموع الأبناء = rollup الأب في كلّ مقياس — لا مقياسَ يفلت من التوازن', () => {
+  const entries = [
+    { orgCode: 'BR01', measures: { consumption: 10, waste: 2, cost: 100 } },
+    { orgCode: 'BR02', measures: { consumption: 30, waste: 1, cost: 300 } },
+    { orgCode: 'BR03', measures: { consumption: 5, returns: 4, cost: 50 } },
+  ];
+  const { byLocation, unlinked } = rollupBy(ROLLUP_TREE, entries);
+  for (const measure of ['consumption', 'waste', 'returns', 'cost']) {
+    const kids = ['BRD1', 'BRD2'].reduce((s2, c) => s2 + (byLocation.get(c)?.rollup?.[measure] || 0), 0);
+    assert.equal(byLocation.get('FNB').rollup[measure] || 0, kids, measure);
+  }
+  assert.equal(byLocation.get('BRD1').rollup.consumption, 40);
+  assert.equal(byLocation.get('FNB').rollup.cost, 450);
+  assert.deepEqual(unlinked, {}); // لا غير مربوط هنا.
+});
+
+test('غير المربوط يُحصى منفصلًا **لكلّ مقياس** — لا يذوب ولا يُوزَّع بالتخمين', () => {
+  const { byLocation, unlinked } = rollupBy(ROLLUP_TREE, [
+    { orgCode: 'BR01', measures: { consumption: 10 } },
+    { orgCode: 'GHOST', measures: { consumption: 7, waste: 3 } },
+  ]);
+  assert.equal(byLocation.get('FNB').rollup.consumption, 10); // النظيف وحده يصعد.
+  assert.deepEqual(unlinked, { consumption: 7, waste: 3 });
+});
+
+test('costByLocation صار غلافًا فوق المحرّك المعمَّم — العائد القديم حرفيًّا (لا محرّكَين)', () => {
+  const rows = costWrap(ROLLUP_TREE, [
+    { orgCode: 'BR01', amount: 100 },
+    { orgCode: 'BR02', amount: 50 },
+  ]);
+  assert.equal(rows.get('BR01').direct, 100); // رقمٌ لا كائن — الشكل القديم.
+  assert.equal(rows.get('BRD1').rollup, 150);
+  assert.equal(rows.get('FNB').rollup, 150);
+});
+
+test('حركات الدفتر المختومة ← مقاييس بسبب قيدها: التسليم استهلاكٌ والتالف هدرٌ والتسوية فرقُ جرد', () => {
+  const entries = orgEntriesFromMoves([
+    { orgCode: 'BR01', reason: 'delivery', qty: 10, value: 200, from: 'MAIN', to: null },
+    { orgCode: 'BR01', reason: 'damage', qty: 2, value: 40, from: 'MAIN', to: null },
+    { orgCode: 'BR01', reason: 'adjustment', qty: 1, value: 5, from: null, to: 'MAIN' },
+    { orgCode: '', reason: 'delivery', qty: 99, value: 1, from: 'MAIN', to: null }, // بلا ختمٍ لا يدخل.
+  ]);
+  assert.equal(entries.length, 3);
+  const { byLocation } = rollupBy(ROLLUP_TREE, entries);
+  const fnb = byLocation.get('FNB').rollup;
+  assert.equal(fnb.consumption, 10);
+  assert.equal(fnb.waste, 2);
+  assert.equal(fnb.countVariance, 1);
+  assert.equal(fnb.cost, 245);
+  assert.equal(fnb.stock, -11); // خرج ١٢ ودخل ١ — صافي الحركة.
+});
+
+test('ترتيب الفروع والنواقص من المحرّك نفسه — الأعلى استهلاكًا والأدنى مخزونًا', () => {
+  const { byLocation } = rollupBy(ROLLUP_TREE, [
+    { orgCode: 'BR01', measures: { consumption: 10, stock: 3 } },
+    { orgCode: 'BR02', measures: { consumption: 30, stock: 50 } },
+    { orgCode: 'BR03', measures: { consumption: 5, stock: 1 } },
+  ]);
+  assert.deepEqual(rankByMeasure(byLocation, 'consumption').map((r) => r.code), ['BR02', 'BR01', 'BR03']);
+  assert.deepEqual(rankByMeasure(byLocation, 'stock', { ascending: true })[0].code, 'BR03'); // الناقص أوّلًا.
+  // والتسعة معرَّفةٌ في سجلٍّ واحدٍ بمصدر كلٍّ منها.
+  assert.equal(Object.keys(ORG_MEASURES).length, 9);
 });

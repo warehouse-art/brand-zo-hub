@@ -26,6 +26,7 @@ import { db, auth } from '../../config/firebase.js';
 import { listUsers } from '../auth/usersService.js';
 import { MANAGER_ROLES } from '../auth/roles.js';
 import { TASK_STATUS, EVENT_TYPE, STATUS_LABELS, toMillis } from './taskShape.js';
+import { reassignVerdict } from './priority.js';
 
 const COL = 'tasks';
 
@@ -90,6 +91,14 @@ export async function createTask(input, profile) {
       : [],
     dueDate: input.dueDate || '',
     dueTime: input.dueTime || '',
+
+    // ‹EXE-103› رأس العمل الميدانيّ — **بلا بنودٍ وبلا زمن**: البنود يكتبها
+    // `WorkerTaskPanel` في `labor_tasks` منذ LOC-401، ونسخةٌ ثانية منها هنا
+    // تصير رقمًا ثانيًا للمنجَز. والقسمة كلّها في `taskShape.splitGenerated`.
+    workKey: String(input.workKey ?? '').trim(),
+    workType: String(input.workType ?? '').trim(),
+    docRef: input.docRef || null,
+    laborTaskId: String(input.laborTaskId ?? '').trim(),
 
     createdByUid: actor.uid,
     createdByName: actor.name,
@@ -164,9 +173,12 @@ export async function addReply(taskId, text, profile) {
 }
 
 /** إعادة الإسناد لمستخدمٍ آخر (المدير فقط — الإلزام في firestore.rules). */
-export async function reassignTask(taskId, assignee, profile) {
+export async function reassignTask(taskId, assignee, profile, reason = '', currentAssignee = '') {
   const actor = currentActor(profile);
-  if (!assignee?.uid) throw new Error('اختر المُسنَد إليه الجديد.');
+  // ‹EXE-303› الحكم من `priority.js` الخالص — والخدمة تنفّذ ولا تقرّر.
+  // والسبب مطلوب: نقلُ عملٍ بلا سبب يجعل تقرير الإنتاجيّة يظلم من سُحبت منه.
+  const verdict = reassignVerdict({ assigneeUid: currentAssignee }, { toUid: assignee?.uid, reason });
+  if (!verdict.ok) throw new Error(verdict.problem);
   await updateDoc(doc(db, COL, taskId), {
     assigneeUid: assignee.uid,
     assigneeName: assignee.name || 'غير معروف',
@@ -176,8 +188,24 @@ export async function reassignTask(taskId, assignee, profile) {
     updatedAt: serverTimestamp(),
   });
   await logEvent(taskId, actor, EVENT_TYPE.REASSIGNED, {
-    text: `أُعيد الإسناد إلى ${assignee.name || ''}`.trim(),
+    text: `أُعيد الإسناد إلى ${assignee.name || ''} — ${String(reason).trim()}`.trim(),
+    reason: String(reason).trim(),
   });
+}
+
+/**
+ * ‹EXE-103› يربط البطاقة بسجلّ تنفيذها في `labor_tasks` — **معرّفٌ لا نسخة**.
+ *
+ * ولا تُكتب هنا حالةٌ ولا زمن: الحالة المستنبَطة من الميدان **تُحسب عند
+ * القراءة** بـ`bridgeVerdict`، والزمن يبقى في `labor_tasks` وحدها. فالخدمة
+ * تنفّذ ولا تقرّر.
+ */
+export async function linkLaborTask(taskId, laborTaskId, profile) {
+  const actor = currentActor(profile);
+  const id = String(laborTaskId ?? '').trim();
+  if (!id) throw new Error('معرّف مهمّة المناولة مطلوب.');
+  await updateDoc(doc(db, COL, taskId), { laborTaskId: id, updatedAt: serverTimestamp() });
+  await logEvent(taskId, actor, EVENT_TYPE.STATUS, { text: `رُبطت بسجلّ التنفيذ ${id}` });
 }
 
 /** يرتّب لقطة المهام بالأحدث أولًا (بلا ختم وقتٍ = الأحدث). */

@@ -112,7 +112,7 @@
 **Cloudflare Worker** (المرجع الأساسي):
 ```bash
 cd odoo-proxy/cloudflare-worker
-cp wrangler.toml.example wrangler.toml   # اضبط ALLOWED_ORIGIN = https://albarshi996.github.io
+cp wrangler.toml.example wrangler.toml   # اضبط ALLOWED_ORIGIN = https://warehouse-art.github.io
 npm i -g wrangler
 wrangler secret put ODOO_URL      # https://yourcompany.odoo.com
 wrangler secret put ODOO_DB       # اسم قاعدة البيانات

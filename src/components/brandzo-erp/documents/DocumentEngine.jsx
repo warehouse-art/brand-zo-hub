@@ -47,7 +47,11 @@ import { listenPriceLists } from '../../../services/pricing/priceListService.js'
 import { listForCustomer, priceDocument } from '../../../services/pricing/priceListModel.js';
 import { subscribePartners } from '../../../services/partnerService.js';
 import { subscribeWarehouses } from '../../../services/warehouseService.js';
+import { listenLocations } from '../../../services/locations/locationsService.js';
+import { binCellVerdict, locationOptions } from '../../../services/locations/locationsModel.js';
 import { listenVehicles } from '../../../services/vehicles/vehiclesService.js';
+import { listenOrgLocations } from '../../../services/org/orgLocationsService.js';
+import { indexLocations, dispatchViolations } from '../../../services/org/orgLocations.js';
 import { subscribeReps } from '../../../services/field/repsService.js';
 import { listenPartnerLedger } from '../../../services/ledger/partnerLedgerService.js';
 import { creditCheck } from '../../../services/ledger/creditGuard.js';
@@ -166,11 +170,19 @@ export default function DocumentEngine() {
   const [repsList, setRepsList] = useState([]);
   useEffect(() => subscribePartners('supplier', setSuppliers, () => setSuppliers([])), []);
   useEffect(() => subscribeWarehouses(setWarehousesList, () => setWarehousesList([])), []);
+  // سيّد مواقع التخزين (LOC-104): الفشل ⇒ قائمةٌ فارغة ⇒ خانة الموقع نصٌّ حرّ
+  // كسلوك اليوم بلا حكمٍ ولا منع — لا تعطيل لمستودعٍ لم يُبنَ سيّده بعد.
+  const [locationsList, setLocationsList] = useState([]);
+  useEffect(() => listenLocations(setLocationsList, () => setLocationsList([])), []);
   useEffect(() => listenVehicles(setVehiclesList), []);
   useEffect(() => subscribeReps(setRepsList, () => setRepsList([])), []);
+  // الشجرة التنظيميّة (FNB-102): منها يُختار مركز التكلفة — الصرف على الفرع
+  // المستفيد لا على القطاع. الفشل ⇒ قائمةٌ فارغة ⇒ الحقل نصٌّ حرّ كما كان.
+  const [orgLocationsList, setOrgLocationsList] = useState([]);
+  useEffect(() => listenOrgLocations(setOrgLocationsList, () => setOrgLocationsList([])), []);
   const partyLists = useMemo(
-    () => ({ suppliers, customers, warehouses: warehousesList, reps: repsList, vehicles: vehiclesList }),
-    [suppliers, customers, warehousesList, repsList, vehiclesList]
+    () => ({ suppliers, customers, warehouses: warehousesList, reps: repsList, vehicles: vehiclesList, orgLocations: orgLocationsList }),
+    [suppliers, customers, warehousesList, repsList, vehiclesList, orgLocationsList]
   );
 
   // دفتر الذمم (م٤-د): منه الرصيد الحقيقيّ. والفشل ⇒ سطورٌ فارغة ⇒ رصيدُ صفرٍ
@@ -184,7 +196,13 @@ export default function DocumentEngine() {
 
   const editable = isEditable(doc?.state) && (!docId || doc?.createdByUid === me?.uid || me?.role === 'admin');
   const canCreate = me && (me.role === 'admin' || (schema?.roles?.create || []).includes(me.role));
-  const violations = useMemo(() => (schema?.warnings && doc ? schema.warnings(doc) : []), [schema, doc]);
+  // تحذيرات المخطّط + حكم وجهة الصرف (FNB-103): قطاعٌ أو براند على مستند
+  // خروجٍ وعاءٌ لا مستفيد — يُنبَّه بالبديل. الحكم عند الإنشاء لا عند القراءة.
+  const violations = useMemo(() => {
+    const base = schema?.warnings && doc ? schema.warnings(doc) : [];
+    if (!doc || !orgLocationsList.length) return base;
+    return [...base, ...dispatchViolations(schema?.type, doc, indexLocations(orgLocationsList))];
+  }, [schema, doc, orgLocationsList]);
 
   // حكم التاريخ يُحسب مع كلّ ضغطة — فيُرى القيد وهو يقع لا عند الحفظ.
   const dating = useMemo(
@@ -264,6 +282,12 @@ export default function DocumentEngine() {
    * وحدة · معامل · أساس) ولا يُعاد حسابها يوم الترحيل من تقدير.
    */
   const itemIndexes = useMemo(() => buildItemIndexes(items), [items]);
+  // اقتراح المواقع محصورٌ بمستودع المستند — عاملُ التخزين في E5 لا يُقترح عليه
+  // رفٌّ في E2. وبلا مستودعٍ في الرأس تُعرض المواقع كلّها (لا حجب).
+  const binChoices = useMemo(
+    () => locationOptions(locationsList, { warehouse: doc?.header?.warehouse }),
+    [locationsList, doc?.header?.warehouse]
+  );
 
   function patchLines(lines) {
     const enriched = lines.map((line) => refreshLineBase(line, itemForLine(line, itemIndexes)));
@@ -689,6 +713,8 @@ export default function DocumentEngine() {
                 onChange={patchLines}
                 onLookup={handleLineLookup}
                 uomOptions={(line) => uomOptionsForLine(line, itemForLine(line, itemIndexes))}
+                binOptions={binChoices}
+                binVerdict={(value) => binCellVerdict(value, locationsList)}
               />
             )}
 

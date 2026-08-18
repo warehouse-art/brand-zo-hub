@@ -1,0 +1,13 @@
+---
+import DashboardLayout from '../../layouts/DashboardLayout.astro';
+// ⚠️ لا تُحذف: مكوّن الشاشة يرسم داخل `.o_theme`، وبلا هذين الملفّين تسقط
+// الأنماط كلّها فتُعرض الصفحة نصًّا مرصوصًا بلا بطاقاتٍ ولا أزرار (وقع 2026-08-17).
+// وحارسٌ في `scripts/audit-portal.mjs` يمنع تكرارها.
+import '../../styles/tokens.css';
+import '../../styles/odoo.css';
+import DirectedStorage from '../../components/brandzo-erp/locations/DirectedStorage.jsx';
+---
+
+<DashboardLayout title="التخزين والسحب الموجّه" light>
+  <DirectedStorage client:load />
+</DashboardLayout>

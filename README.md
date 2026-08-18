@@ -4,11 +4,11 @@
 
 **نظام إدارة مستودعات وسلاسل إمداد** يعمل فعليًّا في شركة برندزو ببنغازي — عربيّ بالكامل (RTL) وبالدينار الليبي، مبنيّ ليحلّ محلّ الورق وجداول الإكسل في التشغيل اليومي.
 
-🌐 **الموقع الحيّ:** https://albarshi996.github.io/warehouse-system/
+🌐 **الموقع الحيّ:** https://warehouse-art.github.io/brand-zo-hub/
 
 </div>
 
-[![Deploy](https://github.com/albarshi996/warehouse-system/actions/workflows/astro.yml/badge.svg)](https://github.com/albarshi996/warehouse-system/actions/workflows/astro.yml)
+[![Deploy](https://github.com/warehouse-art/brand-zo-hub/actions/workflows/astro.yml/badge.svg)](https://github.com/warehouse-art/brand-zo-hub/actions/workflows/astro.yml)
 
 ---
 
@@ -50,7 +50,7 @@ npm install
 npm run dev
 ```
 
-ثم افتح `http://localhost:4321/warehouse-system/`. **كل صفحات لوحة التحكم محميّة بالدخول** — تحتاج حسابًا في Firebase ومتغيّرات `PUBLIC_FIREBASE_*` في ملف `.env` (التفاصيل في دليل المطوّر).
+ثم افتح `http://localhost:4321/brand-zo-hub/`. **كل صفحات لوحة التحكم محميّة بالدخول** — تحتاج حسابًا في Firebase ومتغيّرات `PUBLIC_FIREBASE_*` في ملف `.env` (التفاصيل في دليل المطوّر).
 
 | الأمر | الغرض |
 |---|---|

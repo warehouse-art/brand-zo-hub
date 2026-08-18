@@ -3,8 +3,8 @@
  * رأس PWA — يُدرَج داخل <head> في كل صفحة (DashboardLayout + index + login).
  * يربط ملف التعريف والأيقونات، ويسجّل «العامل الخفي» مع إشعار تحديث لطيف.
  */
-// في Astro 6 قد يأتي BASE_URL بلا شرطة ختامية (/warehouse-system)، فنطبّعه
-// ليصير دائمًا منتهيًا بشرطة واحدة (/warehouse-system/) — وإلا التصقت الروابط.
+// في Astro 6 قد يأتي BASE_URL بلا شرطة ختامية (/brand-zo-hub)، فنطبّعه
+// ليصير دائمًا منتهيًا بشرطة واحدة (/brand-zo-hub/) — وإلا التصقت الروابط.
 const raw = import.meta.env.BASE_URL;
 const base = raw.endsWith('/') ? raw : `${raw}/`;
 ---
@@ -24,7 +24,7 @@ const base = raw.endsWith('/') ? raw : `${raw}/`;
     if (!('serviceWorker' in navigator)) return;
 
     // نشتقّ المسار الأساسي من رابط الـmanifest في الرأس نفسه (بلا اعتماد على
-    // متغيّرات محقونة) — يبقى صحيحًا سواء نُشر على /warehouse-system/ أو نطاق مستقلّ.
+    // متغيّرات محقونة) — يبقى صحيحًا سواء نُشر على /brand-zo-hub/ أو نطاق مستقلّ.
     var manifestLink = document.querySelector('link[rel="manifest"]');
     var base = manifestLink
       ? manifestLink.getAttribute('href').replace(/manifest\.webmanifest$/, '')

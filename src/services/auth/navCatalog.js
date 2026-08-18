@@ -69,6 +69,9 @@ export const NAV_GROUPS = [
     items: [
       { path: '/dashboard/command-center', label: 'لوحة القيادة التشغيلية', icon: 'grid' },
       { path: '/dashboard/warehouses', label: 'المستودعات', icon: 'package' },
+      // التخزين والسحب الموجّه (LOC-202): استيراد أوامر المصدر ← معاينة ←
+      // مستند. مقصورٌ على من يملك اعتماد الاستيراد — لا يراه أمين المخزن.
+      { path: '/dashboard/directed-storage', label: 'التخزين والسحب الموجّه', icon: 'mapPin', roles: ['admin', 'warehouse_manager', 'inventory_auditor'] },
       { path: '/dashboard/stock-ledger', label: 'دفتر حركات المخزون', icon: 'clipboardList' },
       // التقارير التفصيليّة — موضعٌ ثانٍ لأمين المخزن ومسؤول المرتجعات: تقارير
       // المخزون تخصّهما، وهما لا يريان مجموعة «التقارير». والصلاحية اتحادُ المواضع.
@@ -163,7 +166,8 @@ export const NAV_GROUPS = [
       // الأبعاد التنظيمية (CC-401): سيّد المواقع (م٦-أ) يُدار من شاشةٍ واحدة —
       // قطاع›براند›فرع›مركز تكلفة، والتكلفة تصعد الشجرة. موضعه «التقارير» لأنّ
       // الماليّ صاحبه الأوّل — ولا يرى «العمليات» أصلًا (درس اسمٍ بلا باب).
-      { path: '/dashboard/org-dimensions', label: 'الأبعاد التنظيمية والتكلفة', icon: 'workflows', roles: ['admin', 'warehouse_manager', 'finance_manager'] },
+      // ‹FNB-107› مدير القطاع يملك المدخل (البراندات والفروع) فيرى شجرته ويُدخلها.
+      { path: '/dashboard/org-dimensions', label: 'الأبعاد التنظيمية والتكلفة', icon: 'workflows', roles: ['admin', 'warehouse_manager', 'finance_manager', 'fnb_manager'] },
       // غرفة قرار سلاسل الإمداد — المراجعة التنفيذية أمام المدير العام (عرض
       // من 9 شاشات؛ الفرعيات الثمان ترث صلاحية هذا العنصر عبر وراثة الأب في
       // pageAccess). حزمة ربط كوديكس 2026-08-07 — رابط واحد لا قائمة موازية.
@@ -204,6 +208,20 @@ export const NAV_GROUPS = [
       // مركز عروض القطاعات: عرض مستقل لكل قطاع يشرح الدورة المقترحة والأنظمة
       // والضوابط والقرارات المطلوبة، مع إبقاء حالات المواءمة معلنة بوضوح.
       { path: '/dashboard/sector-presentations', label: 'عروض أنظمة القطاعات', icon: 'grid', roles: ['admin', 'warehouse_manager'] },
+      // «سلاسل الإمداد — المطاعم»: عرض المطاعم أُخرج من مركز عروض القطاعات
+      // ليقف تقريرًا مستقلًّا يُدار به اجتماع القطاع — دورة العمل والدورة
+      // المستندية موصولةً بشاشاتها، ومنتهيةً بطلبٍ موحَّد لشركة تنفيذ أودو.
+      // (المحتوى يُستدعى من `sector-presentations.js` نفسه — لا نسخة ثانية.)
+      { path: '/dashboard/restaurants-supply-chain', label: 'سلاسل الإمداد — المطاعم', icon: 'clipboardList', roles: ['admin', 'warehouse_manager'] },
+      // «الدورة المستندية — السلاسل والمشتريات»: عرض اجتماع الإدارة المالية —
+      // الحدّ بين الإدارتين (المشتريات تتبع المالية)، ودورة الشراء بحلقاتها،
+      // والمطابقة الثلاثية، واثنا عشر سيناريو يُفسد الدورة ولكلٍّ حارسٌ مبنيّ.
+      // المدير المالي مُدرَجٌ عمدًا: الجلسة معه، والعرض يُفتح أمامه لا عنه.
+      { path: '/dashboard/finance-procurement-meeting', label: 'الدورة المستندية — السلاسل والمشتريات', icon: 'clipboardList', roles: ['admin', 'warehouse_manager', 'finance_manager'] },
+      // «الهوية التشغيلية للمستودعات»: تقرير التسويق البصريّ معروضًا قسمًا
+      // بقسم (٢٦ قسمًا · ٤٤٢ نموذجًا) بتنقّلٍ وفهرسٍ وملء شاشة — لا محتوى
+      // مؤلَّفًا فوقه. تُفتح أمام التسويق في الجلسة المشتركة.
+      { path: '/dashboard/warehouse-identity-meeting', label: 'الهوية التشغيلية للمستودعات', icon: 'mapPin', roles: ['admin', 'warehouse_manager'] },
       // المراجعة التنفيذية لسلاسل الإمداد [Codex ثم أعاد Claude بناءها بقرار
       // المالك]: عرض محطات «من المتابعة إلى القرار» — لوحة المدير العام،
       // القرارات بأثرَيها، المواقع (155 + الرحبة)، الكتالوج التشغيلي،
@@ -212,6 +230,10 @@ export const NAV_GROUPS = [
       // اجتماع المكتب الهندسي: مراجعة المتطلبات والزيارة الميدانية والمخططات
       // ومشروعات الرحبة وفينسيا، مع مسار متابعة وقرارات إقفال.
       { path: '/dashboard/engineering-office-meeting', label: 'اجتماع المكتب الهندسي', icon: 'clipboardList', roles: ['admin', 'warehouse_manager'] },
+      // اجتماع شركة نوفا (NOV-OPS-001): خطة جرد فرعي بنغازي وطرابلس وتفعيل
+      // دورات النقل والبيع وتحميل المندوبين — عرضٌ حيٌّ تُدار به الجلسة، وفي كل
+      // خطوةٍ بطاقةُ اختصارٍ تفتح الشاشة التي تُنفَّذ فيها داخل البوابة.
+      { path: '/dashboard/nova-inventory-meeting', label: 'اجتماع شركة نوفا — الجرد والنقل', icon: 'clipboardList', roles: ['admin', 'warehouse_manager'] },
       { path: '/dashboard/acceptance-check', label: 'المطابقة والاستلام (UAT)', icon: 'clipboardList', roles: ['admin', 'warehouse_manager'] },
       { path: '/dashboard/portal-value', label: 'لماذا البوابة تكامليّة لأودو', icon: 'grid', roles: ['admin', 'warehouse_manager'] },
       { path: '/dashboard/vendor-scorecard', label: 'بطاقة أداء الموردين', icon: 'users', roles: ['admin', 'warehouse_manager', 'purchase_officer', 'finance_manager'] },

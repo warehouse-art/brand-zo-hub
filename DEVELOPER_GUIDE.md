@@ -18,8 +18,8 @@
 
 | | |
 |---|---|
-| **الحيّ** | https://albarshi996.github.io/warehouse-system/ |
-| **المستودع** | `albarshi996/warehouse-system` — فرع `main` ينشر تلقائيًّا |
+| **الحيّ** | https://warehouse-art.github.io/brand-zo-hub/ |
+| **المستودع** | `warehouse-art/brand-zo-hub` — فرع `main` ينشر تلقائيًّا |
 | **الواجهة** | Astro 6 (توليد ساكن) + جزر React + Tailwind 4 |
 | **البيانات** | Firebase: Auth (بريد/كلمة مرور) + Firestore (خطة Spark المجانية) |
 | **الباك اند** | موديول أودو حقيقي `brandzo-addons/brandzo_warehouse` — 10/12 مرحلة، **غير مربوط بالواجهة بعد** |
@@ -30,7 +30,7 @@
 
 ```bash
 npm install
-npm run dev      # http://localhost:4321/warehouse-system/
+npm run dev      # http://localhost:4321/brand-zo-hub/
 ```
 
 **للدخول تحتاج حسابًا في Firebase** — كل صفحات `/dashboard/**` محميّة. اطلب من المالك إنشاء حساب لك وإسناد دور، أو أنشئ مشروع Firebase خاصًّا بك واملأ `.env`:

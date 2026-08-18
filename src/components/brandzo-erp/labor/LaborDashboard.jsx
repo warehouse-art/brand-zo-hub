@@ -18,16 +18,27 @@ import {
   resumeTask,
   finishTask,
   cancelTask,
+  saveTaskLines,
+  finishLineTask,
+  recordDelayReason,
 } from '../../../services/labor/laborTasksService.js';
 import {
   LABOR_SHIFTS,
   ORDER_TYPES,
+  isLineLevel,
   taskState,
   taskDurationMinutes,
   crewSize,
   summarizeTasks,
   crewsNeeded,
 } from '../../../services/labor/laborModel.js';
+import WorkerTaskPanel from './WorkerTaskPanel.jsx';
+import { workQueue } from '../../../services/tasks/taskShape.js';
+import { listenVehicles } from '../../../services/vehicles/vehiclesService.js';
+import { RESOURCE_KINDS, RESOURCE_STATE, resolveResources, resourcesSnapshot } from '../../../services/labor/resourcesResolver.js';
+import { listenDoors, listenYardVisits } from '../../../services/fleet/yardService.js';
+// ‹EXE-702› الأداء بعدل — الحكم من المنطق الخالص، والشاشة تعرض سببه معه.
+import { explainStandard, performanceOf, performanceSummary, standardFor } from '../../../services/labor/laborStandard.js';
 
 const LABOR_ROLES = ['admin', 'warehouse_manager', 'labor_supervisor'];
 const input =
@@ -43,6 +54,10 @@ export default function LaborDashboard() {
   const [tab, setTab] = useState('board');
   const [crewForm, setCrewForm] = useState(false);
   const [taskForm, setTaskForm] = useState(false);
+  const [queueIndex, setQueueIndex] = useState(0);
+  const [vehicles, setVehicles] = useState([]);
+  const [doors, setDoors] = useState([]);
+  const [yardVisits, setYardVisits] = useState([]);
 
   useEffect(() => {
     const unsub = subscribeAuth(async (u) => {
@@ -56,9 +71,18 @@ export default function LaborDashboard() {
     if (!me || !LABOR_ROLES.includes(me.role)) return undefined;
     const u1 = listenCrews(setCrews, (e) => setErr(e?.message || 'تعذّر الاتصال'));
     const u2 = listenLaborTasks(setTasks, (e) => setErr(e?.message || 'تعذّر الاتصال'));
+    // ‹EXE-402› المركبات مصدرٌ ثانٍ للموارد — تُقرأ ولا تُنسخ.
+    const u3 = listenVehicles(setVehicles);
+    // ‹EXE-601› والأبواب مصدرٌ رابع: أُعلن نوعُها منذ EXE-401 ووصل مصدره الآن.
+    // وبلا هذين المستمعين يبقى النوع معرَّفًا وصفُّه فارغًا — إعلانٌ بلا وفاء.
+    const u4 = listenDoors(setDoors, () => setDoors([]));
+    const u5 = listenYardVisits((list) => setYardVisits(list), () => setYardVisits([]));
     return () => {
       u1();
       u2();
+      u3();
+      u4();
+      u5();
     };
   }, [me]);
 
@@ -72,6 +96,22 @@ export default function LaborDashboard() {
   const activeCrews = useMemo(() => crews.filter((c) => c.active !== false), [crews]);
   const running = useMemo(() => tasks.filter((t) => t.state === 'in_progress' || t.state === 'paused'), [tasks]);
   const pending = useMemo(() => tasks.filter((t) => t.state === 'pending'), [tasks]);
+  // ‹LOC-402› مهامّ تُنفَّذ بندًا بندًا (تخزين/سحب) — لها شاشة تنفيذٍ خاصّة.
+  const lineTasks = useMemo(
+    () => tasks.filter((t) => isLineLevel(t.orderType) && t.state !== 'done' && t.state !== 'cancelled'),
+    [tasks]
+  );
+  // ‹EXE-104› الطابور ورتبته من المنطق الخالص — الشاشة تعرض ولا ترتّب.
+  const { queue } = useMemo(() => workQueue(lineTasks), [lineTasks]);
+  const current = queue[Math.min(queueIndex, Math.max(0, queue.length - 1))] || null;
+
+  // ‹EXE-402› الموارد تُحلّ من مصادرها — والأبواب رابعُها منذ ‹EXE-601›.
+  const resources = useMemo(
+    () => resolveResources({ crews, vehicles, laborTasks: tasks, doors, yardVisits, nowMs: Date.now() }),
+    [crews, vehicles, tasks, doors, yardVisits]
+  );
+  const resourceSnap = useMemo(() => resourcesSnapshot(resources), [resources]);
+
   const busyCrewIds = useMemo(() => new Set(running.map((t) => t.crewId)), [running]);
   const idleCrews = useMemo(() => activeCrews.filter((c) => !busyCrewIds.has(c.id)), [activeCrews, busyCrewIds]);
 
@@ -125,14 +165,14 @@ export default function LaborDashboard() {
           ＋ تشكيل فريق
         </button>
         <div className="flex-1" />
-        {['board', 'crews', 'tasks', 'plan'].map((k) => (
+        {['board', 'mine', 'resources', 'standard', 'crews', 'tasks', 'plan'].map((k) => (
           <button
             key={k}
             type="button"
             onClick={() => setTab(k)}
             className={`px-3 py-1.5 rounded-full text-xs font-bold border ${tab === k ? 'bg-accent text-brand-navy border-accent' : 'bg-chip text-ink-2 border-line hover:border-accent/50'}`}
           >
-            {{ board: 'اللوحة', crews: 'الفرق', tasks: 'المهام', plan: 'تخطيط الموارد' }[k]}
+            {{ board: 'اللوحة', mine: 'مهامي', resources: 'الموارد', standard: 'الأداء والمعياريّ', crews: 'الفرق', tasks: 'المهام', plan: 'تخطيط الموارد' }[k]}
           </button>
         ))}
       </div>
@@ -175,7 +215,7 @@ export default function LaborDashboard() {
                   {pending.map((t) => (
                     <li key={t.id} className="flex items-center justify-between gap-2 py-1.5 border-b border-line last:border-0">
                       <span className="text-sm text-ink">{ORDER_TYPES[t.orderType]?.label || t.orderType} · {crewsById[t.crewId]?.crewNo || '—'}{t.docRef?.number ? ` · ${t.docRef.number}` : ''}</span>
-                      <button type="button" onClick={() => act(() => startTask(t, me))} className="text-xs font-bold text-green-700 hover:underline whitespace-nowrap">بدء ▶</button>
+                      <button type="button" onClick={() => act(() => startTask(t, me))} className="text-xs font-bold text-green-700 hover:underline whitespace-nowrap">بدء</button>
                     </li>
                   ))}
                 </MiniList>
@@ -234,8 +274,198 @@ export default function LaborDashboard() {
         </Section>
       )}
 
+      {/* ‹LOC-402› «مهامي» — تنفيذ التخزين والسحب بندًا بندًا على جهاز العامل.
+          تظهر مهامّ line-level وحدها؛ وبقيّة الأنواع تبقى في «المهام» كما هي. */}
+      {/* ‹EXE-104› مهمّةٌ واحدة في الصدارة لا قائمةٌ يوازن بينها: عاملٌ يحمل
+          طردًا بيدٍ وهاتفًا بالأخرى لا يختار من اثنتي عشرة. والباقي خلف عدّاد،
+          وسببُ الصدارة معلَنٌ فوقها. */}
+      {tab === 'mine' && (
+        <Section title="مهامي" hint="التخزين والسحب — اختر الرفّ وامسح">
+          {queue.length === 0 ? (
+            <Empty>لا مهامّ تخزينٍ أو سحبٍ مُسندة الآن.</Empty>
+          ) : (
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                <span className="text-ink-2">المهمّة</span>
+                <strong className="text-ink">{queueIndex + 1}</strong>
+                <span className="text-ink-2">من {queue.length}</span>
+                <button
+                  type="button"
+                  disabled={queueIndex === 0}
+                  onClick={() => setQueueIndex((i) => Math.max(0, i - 1))}
+                  className="px-2 py-1 rounded border border-line text-ink-2 disabled:opacity-40"
+                >
+                  السابقة
+                </button>
+                <button
+                  type="button"
+                  disabled={queueIndex >= queue.length - 1}
+                  onClick={() => setQueueIndex((i) => Math.min(queue.length - 1, i + 1))}
+                  className="px-2 py-1 rounded border border-line text-ink-2 disabled:opacity-40"
+                >
+                  التالية
+                </button>
+              </div>
+
+              {current && (
+                <div className="rounded-xl border border-line p-3">
+                  <div className="flex flex-wrap items-center gap-2 mb-1">
+                    <strong className="text-sm text-ink">{ORDER_TYPES[current.task.orderType]?.label}</strong>
+                    {current.task.docRef?.number && (
+                      <span className="text-xs text-ink-2 font-mono">{current.task.docRef.number}</span>
+                    )}
+                    <span className="text-xs text-ink-2">فريق {crewsById[current.task.crewId]?.crewNo || '—'}</span>
+                    {current.task.state === 'pending' && (
+                      <button
+                        type="button"
+                        onClick={() => act(() => startTask(current.task, me))}
+                        className="text-xs font-bold text-green-700 hover:underline"
+                      >
+                        بدء
+                      </button>
+                    )}
+                  </div>
+                  {/* سببُ الصدارة — «الرقم بلا مرجعٍ لا يُعرض» */}
+                  <p className="text-xs text-ink-2 mb-2">{current.reason}</p>
+                  <WorkerTaskPanel
+                    task={current.task}
+                    onSaveLines={(lines, entry) => act(() => saveTaskLines(current.task, lines, me, entry))}
+                    onFinish={(verdict, lines) => act(() => finishLineTask(current.task, verdict, lines, me))}
+                    onDelayReason={(id) => id && act(() => recordDelayReason(current.task, { id }, me))}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+        </Section>
+      )}
+
+      {/* ‹EXE-402› الموارد: من متاحٌ الآن ومن متعثّر — بلا سجلٍّ رابع. */}
+      {tab === 'resources' && (
+        <Section title="الموارد التشغيليّة" hint="محسوبةٌ من الفرق والمركبات وأوامر الشغل — لا سجلّ مستقلّ">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+            <Kpi label="موارد" value={resourceSnap.total} />
+            <Kpi label="متاحة الآن" value={resourceSnap.assignable} />
+            <Kpi label="مشغولة" value={resourceSnap.byState.busy || 0} />
+            <Kpi label="خارج الخدمة" value={(resourceSnap.byState.maintenance || 0) + (resourceSnap.byState.stopped || 0)} alert={(resourceSnap.byState.maintenance || 0) + (resourceSnap.byState.stopped || 0) > 0} />
+          </div>
+
+          {resources.length === 0 ? (
+            <Empty>لا موارد معرَّفة — أضِف فرقًا أو مركبات.</Empty>
+          ) : (
+            <div className="space-y-2">
+              {resources.map((r) => (
+                <div key={r.id} className="flex flex-wrap items-center gap-2 rounded-xl border border-line p-3">
+                  <span className="text-xs text-ink-2">{RESOURCE_KINDS[r.kind]?.label}</span>
+                  <strong className="text-sm text-ink">{r.label}</strong>
+                  <span className={`text-xs ${RESOURCE_STATE[r.state]?.assignable ? 'text-green-700' : r.state === 'maintenance' || r.state === 'stopped' ? 'text-brand-red' : 'text-ink-2'}`}>
+                    {RESOURCE_STATE[r.state]?.label || r.state}
+                  </span>
+                  {/* السبب ومدّته — موردٌ متوقّفٌ بلا سببٍ شكوى لا معلومة. */}
+                  {r.reason && <span className="text-xs text-ink-2">— {r.reason}</span>}
+                  {r.shift && <span className="text-xs text-muted">وردية {r.shift}</span>}
+                  {r.size > 0 && <span className="text-xs text-muted">{r.size} عاملًا</span>}
+                </div>
+              ))}
+            </div>
+          )}
+        </Section>
+      )}
+
+      {tab === 'standard' && <StandardPanel tasks={tasks} nowMs={Date.now()} />}
+
       {tab === 'plan' && <PlanPanel summary={summary} activeCrews={activeCrews} />}
     </div>
+  );
+}
+
+/**
+ * الأداء بعدل ‹EXE-702› — للمشرف وحده (ت-O05).
+ *
+ * ★★ **ولا ترتيبَ عمّالٍ تنازليًّا هنا ولا في غيرها.** لوحةٌ ترتّب البشر
+ * تُنتج سباقًا يُخفي التعثّر بدل أن يكشفه: من تأخّر لعطلِ جهازٍ يتعلّم ألّا
+ * يُبلّغ كي لا ينزل في القائمة — فتفقد الإدارة الإشارةَ التي تحتاجها. فما
+ * يُعرض هنا **أين يضيع الوقت** لا **من أضاعه**، والأسباب مرتّبةٌ بأثرها.
+ */
+function StandardPanel({ tasks, nowMs }) {
+  const done = useMemo(() => (tasks || []).filter((t) => t.state === 'done' || t.state === 'paused'), [tasks]);
+  const perf = useMemo(() => performanceSummary(done, { nowMs }), [done, nowMs]);
+  const sample = useMemo(() => done.slice(0, 12).map((t) => ({ task: t, verdict: performanceOf(t, { nowMs }) })), [done, nowMs]);
+  const std = useMemo(() => standardFor({ lines: [{ qtyRequired: 1 }] }, { atMs: nowMs }), [nowMs]);
+
+  return (
+    <Section
+      title="الأداء مقابل المعياريّ"
+      hint="للمشرف — والمعيار أداةُ اكتشافِ مشكلةٍ لا حكمٌ آليّ على موظف"
+    >
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+        <Kpi label="مقيسة" value={perf.measured} />
+        <Kpi label="ضمن المعياريّ" value={perf.ontime} />
+        <Kpi label="تجاوزَ بعذر" value={perf.excused} />
+        <Kpi label="بلا سببٍ مسجَّل" value={perf.unexplained} alert={perf.unexplained > 0} />
+      </div>
+
+      {/* عناصر المعياريّ — يراها المشرف كي يعرف ممّ تكوّن الرقم. */}
+      <div className="rounded-xl border border-line p-3 mb-4">
+        <p className="text-xs font-bold text-ink-2 mb-2">
+          المعياريّ إصدار {std.version} — {std.versionLabel}
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {std.elements.map((e) => (
+            <span key={e.id} className="text-[11px] px-2 py-1 rounded-lg border border-line text-ink-2" title={e.note || e.hint}>
+              {e.label}: {e.unitSeconds || e.count}
+              {e.per === 'percent' ? '٪' : ' ث'}
+              {e.basis === 'estimated' && e.id !== 'allowance' ? ' · تقديريّ' : ''}
+            </span>
+          ))}
+        </div>
+        {std.notes.length > 0 && <p className="text-[11px] text-ink-2 mt-2">{std.notes.join(' · ')}</p>}
+      </div>
+
+      {/* أين يضيع الوقت — لا من أضاعه. */}
+      {perf.reasons.length > 0 && (
+        <div className="rounded-xl border border-line p-3 mb-4">
+          <p className="text-xs font-bold text-ink-2 mb-2">أسباب التأخّر — مرتّبةً بأثرها</p>
+          {perf.reasons.map((r) => (
+            <div key={r.id} className="flex items-center justify-between text-xs border-t border-line py-1.5 first:border-t-0">
+              <span className="text-ink-2">
+                {r.label}
+                {!r.blames && <span className="text-muted"> · خارج إرادة المنفّذ</span>}
+              </span>
+              <span className="text-ink font-bold">{r.count} مهمّة · {r.minutes}د</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {done.length === 0 ? (
+        <Empty>لا مهامَّ منتهية بعد — ولا يُقاس ما لم يتمّ.</Empty>
+      ) : (
+        <div className="space-y-2">
+          {sample.map(({ task: t, verdict }) => (
+            <div key={t.id} className="rounded-xl border border-line p-3">
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                <strong className="text-ink">{ORDER_TYPES[t.orderType]?.label || t.orderType}</strong>
+                <span className="text-ink-2">{t.docRef?.number || '—'}</span>
+                <span
+                  className={`text-[11px] px-2 py-0.5 rounded-full border ${
+                    verdict.countedVariance ? 'border-brand-red/40 text-brand-red' : 'border-line text-ink-2'
+                  }`}
+                >
+                  {verdict.status.label}
+                </span>
+              </div>
+              {/* ★ الفارق مع سببه دائمًا — لا رقمٌ عارٍ. */}
+              <p className="text-[11px] text-ink-2 mt-1">{verdict.message}</p>
+              <p className="text-[11px] text-muted mt-0.5">{explainStandard(verdict.standard)}</p>
+            </div>
+          ))}
+          {done.length > sample.length && (
+            <p className="text-[11px] text-muted text-center">…و{done.length - sample.length} مهمّةً أخرى.</p>
+          )}
+        </div>
+      )}
+    </Section>
   );
 }
 
