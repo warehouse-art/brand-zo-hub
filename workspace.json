@@ -7,6 +7,7 @@
   "rules": "قواعد إدارة تقنية المعلومات هي الحاكمة",
   "pages": "https://warehouse-art.github.io/brand-zo-hub/",
   "folder": "BrandZo HUB/brand-zo-hub",
+  "autoSync": true,
   "sibling": {
     "name": "المستودع الشخصيّ",
     "repo": "albarshi996/warehouse-system",
@@ -14,6 +15,7 @@
     "purpose": "مشروع الاشتراكات، تطويرٌ وفق أفكارنا",
     "rules": "دستور AGENTS.md هو الحاكم — الاجتهاد مفتوح ضمنه",
     "pages": "https://albarshi996.github.io/warehouse-system/",
-    "folder": "BrandZo HUB/warehouse-system-main"
+    "folder": "BrandZo HUB/warehouse-system-main",
+    "autoSync": false
   }
 }
