@@ -4935,7 +4935,7 @@
             "actions": [
               "update"
             ],
-            "condition": "isManager() || (isStockActor() // تكرار مشاهدة من الماسح (فاعل مخزنيّ): الحالة لا تتغيّر // والبتّ لا يُنتحل. كان أيّ مصادَقٍ يُحدّث — حُصر بالفاعل المخزنيّ. &&",
+            "condition": "isManager() || (isStockActor() && request.resource.data.state == resource.data.state && request.resource.data.state == 'pending')",
             "roles": [
               "isManager",
               "isStockActor"
@@ -6552,7 +6552,7 @@
             "actions": [
               "update"
             ],
-            "condition": "isYardWriter() // الأصل لا يُزوَّر بعد الفتح — نمط `originKept` في المهامّ. && request.resource.data.createdByUid == resource.data.createdByUid",
+            "condition": "isYardWriter() && request.resource.data.createdByUid == resource.data.createdByUid",
             "roles": [
               "isYardWriter"
             ]
