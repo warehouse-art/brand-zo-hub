@@ -104,10 +104,46 @@ export default function ScanFlow() {
   useEffect(() => subscribeItems(setItems, () => setItems([])), []);
   const itemIndexes = useMemo(() => buildItemIndexes(items), [items]);
 
+  /**
+   * رابط الدعوة: `?op=H4K9TM` — الطريق الذي يسلكه عضو اللجنة.
+   *
+   * يسبق استئناف المحفوظ عمدًا: من يفتح دعوةً جديدة يقصدها هو، لا الجلسةَ
+   * التي كان فيها أمس. وبعد الدخول يُنظَّف المعامل من شريط العنوان كي لا
+   * تُعيده كلّ إعادة تحميلٍ إلى جلسةٍ تركها بقصد.
+   */
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const invited = new URLSearchParams(window.location.search).get('op');
+    if (!invited || !isValidOperationCode(invited)) return;
+    let alive = true;
+    findOperationsByCode(invited)
+      .then((found) => {
+        if (!alive) return;
+        const verdict = resolveOperationByCode(found);
+        if (verdict.ok) {
+          enterOperation(verdict.operation);
+        } else if (verdict.reason === 'closed') {
+          flash('err', `دعوةٌ إلى جلسةٍ أُقفلت (${formatOperationCode(invited)}).`);
+        } else if (verdict.reason === 'ambiguous') {
+          flash('err', `جلستان مفتوحتان بالرمز ${formatOperationCode(invited)} — راجع المدير.`);
+        } else {
+          flash('err', `لا جلسة بالرمز ${formatOperationCode(invited)}.`);
+        }
+        const url = new URL(window.location.href);
+        url.searchParams.delete('op');
+        window.history.replaceState({}, '', url);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
+
   // استئناف عمليةٍ مفتوحة محفوظة — العمل الواحد لا ينقسم بين عمليتين.
   useEffect(() => {
     const saved = typeof localStorage !== 'undefined' ? localStorage.getItem(OP_KEY) : null;
     if (!saved) return;
+    if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('op')) return;
     getOperation(saved)
       .then((op) => {
         if (op && op.status === 'open') {
@@ -372,6 +408,44 @@ export default function ScanFlow() {
     }
   }
 
+  /** رابط الدعوة الكامل — ما يُلصق في مجموعة اللجنة. */
+  const inviteLink = useMemo(() => {
+    if (typeof window === 'undefined' || !opCode) return '';
+    return `${window.location.origin}${window.location.pathname}?op=${normalizeOperationCode(opCode)}`;
+  }, [opCode]);
+
+  /**
+   * يفتح الجلسة بقرارٍ صريح من المدير — لا بأوّل مسح.
+   * فالدعوة تُرسل **قبل** أن يُعدّ أحدٌ شيئًا، وهذا ترتيب العمل الحقيقيّ:
+   * يُفتح الجرد، ويُرسل الرابط، ثمّ تبدأ اللجنة.
+   */
+  async function openSession() {
+    if (!mode) {
+      flash('err', 'اختر نوع الجلسة أوّلًا: جرد أو استلام أو صرف.');
+      return;
+    }
+    setBusy(true);
+    try {
+      await ensureOperation(mode);
+      flash('ok', 'فُتحت الجلسة — أرسل رابط الدعوة للجنة.');
+    } catch (e) {
+      flash('err', e?.message ?? 'تعذّر فتح الجلسة');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** نسخُ رابط الدعوة — سطرٌ واحدٌ يُلصق في مجموعة اللجنة. */
+  async function copyInvite() {
+    if (!inviteLink) return;
+    try {
+      await navigator.clipboard.writeText(inviteLink);
+      flash('ok', 'نُسخ رابط الدعوة — ألصقه للجنة.');
+    } catch {
+      flash('err', `تعذّر النسخ — الرابط: ${inviteLink}`);
+    }
+  }
+
   /** نسخُ الرمز إلى الحافظة — ليُرسل في مجموعة اللجنة بلا إملاء. */
   async function copyOpCode() {
     const shown = formatOperationCode(opCode) || opId;
@@ -503,6 +577,61 @@ export default function ScanFlow() {
       </div>
 
       {/* ٢ — المسح */}
+      {/*
+        رمز العملية — مفتاح دخول اللجنة.
+        كان يُعرض معرّف Firestore الخام في حاشيةٍ بحجم عشر نقاط: عشرون محرفًا
+        عشوائيًّا حسّاسًا لحالة الأحرف، لا يُملى صوتًا ولا يُكتب على هاتف. فصار
+        رمزًا من ستّة محارف في بطاقةٍ تُرى، يُنسخ بزرّ ويُغيّره المدير.
+      */}
+      {opId && (
+        <div className="o_ds_card o_ds_pad" style={{ marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          <div style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            <span style={{ fontWeight: 'var(--o-font-weight-bold)' }}>الجلسة مفتوحة</span>
+            <button type="button" className="btn btn-primary btn-sm" onClick={copyInvite} data-op-invite disabled={!inviteLink}>
+              نسخ رابط الدعوة
+            </button>
+            <a
+              className="btn btn-secondary btn-sm"
+              href={inviteLink ? `https://wa.me/?text=${encodeURIComponent(`دعوة لجلسة ${mode || 'جرد'} — افتح الرابط وادخل بحسابك:
+${inviteLink}`)}` : undefined}
+              target="_blank"
+              rel="noopener noreferrer"
+              data-op-whatsapp
+              style={inviteLink ? undefined : { pointerEvents: 'none', opacity: 0.5 }}
+            >
+              إرسال بواتساب
+            </a>
+            <span style={{ fontSize: '11px', color: 'var(--o-main-color-muted)' }}>
+              يفتحه العضو ويدخل بحسابه — فيجد نفسه داخل الجلسة مباشرةً.
+            </span>
+          </div>
+          <span style={{ fontSize: 'var(--o-font-size-xs)', color: 'var(--o-main-color-muted)' }}>
+            وللإملاء صوتًا — الرمز:
+          </span>
+          <strong
+            data-op-code
+            style={{
+              fontFamily: 'monospace', direction: 'ltr', fontSize: '20px',
+              letterSpacing: '2px', padding: '2px 10px', borderRadius: '6px',
+              background: 'var(--o-gray-100, #f1f1f1)',
+            }}
+          >
+            {formatOperationCode(opCode) || '—'}
+          </strong>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={copyOpCode} data-op-copy>
+            نسخ
+          </button>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={editOpCode} disabled={codeBusy} data-op-edit>
+            تغيير الرمز
+          </button>
+          {!opCode && (
+            <span style={{ fontSize: '11px', color: 'var(--o-main-color-muted)' }}>
+              عمليةٌ فُتحت قبل الرموز — اضغط «تغيير الرمز» لتُعطيها واحدًا.
+            </span>
+          )}
+        </div>
+      )}
+
       <p style={{ margin: '0 0 8px', fontSize: 'var(--o-font-size-sm)', color: 'var(--o-main-color-muted)' }}>
         ٢ — امسح الباركود أو اكتبه ثم Enter:
       </p>
@@ -800,46 +929,24 @@ export default function ScanFlow() {
         </div>
       ) : null}
 
-      {/*
-        رمز العملية — مفتاح دخول اللجنة.
-        كان يُعرض معرّف Firestore الخام في حاشيةٍ بحجم عشر نقاط: عشرون محرفًا
-        عشوائيًّا حسّاسًا لحالة الأحرف، لا يُملى صوتًا ولا يُكتب على هاتف. فصار
-        رمزًا من ستّة محارف في بطاقةٍ تُرى، يُنسخ بزرّ ويُغيّره المدير.
-      */}
-      {opId && (
-        <div className="o_ds_card o_ds_pad" style={{ marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 'var(--o-font-size-xs)', color: 'var(--o-main-color-muted)' }}>
-            رمز العملية — يدخل به أعضاء اللجنة:
-          </span>
-          <strong
-            data-op-code
-            style={{
-              fontFamily: 'monospace', direction: 'ltr', fontSize: '20px',
-              letterSpacing: '2px', padding: '2px 10px', borderRadius: '6px',
-              background: 'var(--o-gray-100, #f1f1f1)',
-            }}
-          >
-            {formatOperationCode(opCode) || '—'}
-          </strong>
-          <button type="button" className="btn btn-secondary btn-sm" onClick={copyOpCode} data-op-copy>
-            نسخ
-          </button>
-          <button type="button" className="btn btn-secondary btn-sm" onClick={editOpCode} disabled={codeBusy} data-op-edit>
-            تغيير الرمز
-          </button>
-          {!opCode && (
-            <span style={{ fontSize: '11px', color: 'var(--o-main-color-muted)' }}>
-              عمليةٌ فُتحت قبل الرموز — اضغط «تغيير الرمز» لتُعطيها واحدًا.
-            </span>
-          )}
-        </div>
-      )}
-
       {/* العمل الجماعيّ: الانضمام لعملية زميلٍ برمزها — يظهر ما دامت لا عملية جارية */}
       {!opId && (
         <div className="o_ds_card o_ds_pad" style={{ marginBottom: '14px' }}>
           <p style={{ margin: '0 0 6px', fontSize: 'var(--o-font-size-xs)', color: 'var(--o-main-color-muted)' }}>
-            لا عملية جارية — أوّل حفظٍ يفتح عمليةً جديدة برمزٍ خاصّ بها. وللانضمام إلى عمليةِ زميلٍ مفتوحة، اكتب رمزها (ستّة محارف مثل H4K-9TM):
+            لا جلسة جارية. <strong>افتح جلسةً</strong> ثمّ أرسل رابطها للجنة — أو انضمّ إلى جلسةِ زميلٍ برمزها.
+          </p>
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={openSession}
+            disabled={busy || !mode}
+            data-op-open
+            style={{ width: '100%', marginBottom: '10px' }}
+          >
+            {mode ? `افتح جلسة ${mode}` : 'اختر النوع أوّلًا لتفتح جلسة'}
+          </button>
+          <p style={{ margin: '0 0 6px', fontSize: 'var(--o-font-size-xs)', color: 'var(--o-main-color-muted)' }}>
+            أو ادخل بالرمز إن أُملي عليك (ستّة محارف مثل H4K-9TM):
           </p>
           <div style={{ display: 'flex', gap: '6px' }}>
             <input
