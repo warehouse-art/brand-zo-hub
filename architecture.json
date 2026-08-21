@@ -10,9 +10,9 @@
   },
   "counts": {
     "modules": 96,
-    "serviceDomains": 43,
-    "serviceFiles": 413,
-    "collections": 81,
+    "serviceDomains": 44,
+    "serviceFiles": 416,
+    "collections": 82,
     "roles": 18,
     "odooModels": 12,
     "odooGuards": 51,
@@ -622,6 +622,8 @@
       "summary": "",
       "file": "src/pages/dashboard/retail-hub.astro",
       "usesServices": [
+        "auth",
+        "retail",
         "ui"
       ]
     },
@@ -729,6 +731,7 @@
         "custody",
         "fleet",
         "maintenance",
+        "ui",
         "vehicles"
       ]
     },
@@ -3304,6 +3307,41 @@
       "collections": []
     },
     {
+      "domain": "retail",
+      "dir": "src/services/retail",
+      "files": [
+        "hubModel.js",
+        "hubModel.test.js",
+        "hubService.js"
+      ],
+      "fileCount": 3,
+      "testCount": 1,
+      "exports": [
+        "EDITABLE_FIELDS",
+        "HEX_MAX_RADIUS",
+        "HEX_MIN_RADIUS",
+        "HUB_WRITER_ROLES",
+        "LAT_CORR",
+        "adaptiveRadius",
+        "canEditHub",
+        "clearHubOverrides",
+        "hexPolygon",
+        "hubStats",
+        "incomeLabel",
+        "infraLabel",
+        "listenHubOverrides",
+        "matchColor",
+        "mergeOverrides",
+        "sanitizeOverride",
+        "saveHubOverride",
+        "sectorLabel",
+        "segmentBadgeClass"
+      ],
+      "collections": [
+        "retail_hub_overrides"
+      ]
+    },
+    {
       "domain": "settings",
       "dir": "src/services/settings",
       "files": [
@@ -3689,9 +3727,11 @@
         "SPOTS",
         "SWEEP_EXEMPT",
         "agentsBlock",
+        "atRiskOfErasure",
         "identityOnly",
         "isSweepExempt",
         "leaks",
+        "lf",
         "replaceBlock",
         "stamp",
         "tokensOf",
@@ -4895,7 +4935,7 @@
             "actions": [
               "update"
             ],
-            "condition": "isManager() || (isStockActor() && request.resource.data.state == resource.data.state && request.resource.data.state == 'pending')",
+            "condition": "isManager() || (isStockActor() // تكرار مشاهدة من الماسح (فاعل مخزنيّ): الحالة لا تتغيّر // والبتّ لا يُنتحل. كان أيّ مصادَقٍ يُحدّث — حُصر بالفاعل المخزنيّ. &&",
             "roles": [
               "isManager",
               "isStockActor"
@@ -5670,6 +5710,40 @@
             ],
             "condition": "false",
             "roles": []
+          }
+        ]
+      },
+      {
+        "name": "retail_hub_overrides",
+        "path": "retail_hub_overrides",
+        "rules": [
+          {
+            "actions": [
+              "read"
+            ],
+            "condition": "signedIn()",
+            "roles": [
+              "signedIn"
+            ]
+          },
+          {
+            "actions": [
+              "create",
+              "update"
+            ],
+            "condition": "isManager() && request.resource.data.id is int",
+            "roles": [
+              "isManager"
+            ]
+          },
+          {
+            "actions": [
+              "delete"
+            ],
+            "condition": "isManager()",
+            "roles": [
+              "isManager"
+            ]
           }
         ]
       },
@@ -6478,7 +6552,7 @@
             "actions": [
               "update"
             ],
-            "condition": "isYardWriter() && request.resource.data.createdByUid == resource.data.createdByUid",
+            "condition": "isYardWriter() // الأصل لا يُزوَّر بعد الفتح — نمط `originKept` في المهامّ. && request.resource.data.createdByUid == resource.data.createdByUid",
             "roles": [
               "isYardWriter"
             ]
@@ -7434,7 +7508,7 @@
       "test": "node --test \"src/**/*.test.js\"",
       "test:rules": "firebase emulators:exec --only firestore \"node --test test/firestore-rules.test.mjs\"",
       "audit": "node scripts/audit-portal.mjs",
-      "plan": "npm run where && npm run plan:phase-one && npm run plan:client && npm run plan:sap && npm run plan:locations",
+      "plan": "npm run where && npm run plan:phase-one && npm run plan:client && npm run plan:sap && npm run plan:locations && npm run plan:exec && npm run plan:fnb",
       "plan:phase-one": "node scripts/plan-check.mjs",
       "plan:client": "node scripts/plan-check.mjs --plan docs/plan/client-completion.json --resume docs/plan/استئناف-نسخة-العميل.md",
       "plan:sap": "node scripts/plan-check.mjs --plan docs/plan/sap-alignment.json --resume docs/plan/استئناف-المواءمة.md",

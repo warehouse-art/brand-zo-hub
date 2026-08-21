@@ -21,6 +21,8 @@ import {
   tokensOf,
   stamp,
   leaks,
+  lf,
+  atRiskOfErasure,
   replaceBlock,
   agentsBlock,
   workspaceDoc,
@@ -148,6 +150,58 @@ test('الكتلة والبطاقة تذكران المستودعين معًا،
   for (const spot of SPOTS) assert.ok(doc.includes(spot.file), `البطاقة تسرد ${spot.file}`);
 });
 
+// ═══ حارس المحو — اتّجاه السؤال ═══════════════════════════════════════════
+
+/**
+ * المشهد: `package.json` في المستودعَين. الأصل المشترك يحمل هويّة الشقيق
+ * (فالتاريخ مشترك من عنده)، ونسختنا تحمل هويّتنا.
+ */
+const pkg = (name, script) =>
+  `{\n  "name": "${name}",\n  "scripts": {\n    "plan": "${script}"\n  },\n  "url": "https://github.com/${name === 'warehouse-system' ? 'albarshi996/warehouse-system' : 'warehouse-art/brand-zo-hub'}"\n}\n`;
+
+// «نحن» هنا المستودع الشخصيّ (me) و«الشقيق» مستودع الشركة (you).
+const OURS = (script) => pkg('warehouse-system', script);
+const THEIRS = (script) => pkg('brand-zo-hub', script);
+
+test('★ تقدُّمُ الشقيق وحده ليس خطرًا — وهذا ما كان يُسقط المزامنة كلّ ساعة', () => {
+  // لم نغيّر شيئًا منذ الأصل المشترك (سوى ختم الهويّة الذي يفعله الدمج نفسه)،
+  // والشقيق أضاف سكربتًا. لا شيء عندنا يُفقد.
+  const base = THEIRS('a && b');
+  const ours = OURS('a && b');
+  const theirs = THEIRS('a && b && c');
+  assert.equal(
+    identityOnly({ file: 'package.json', ours, theirs, me, you }),
+    false,
+    'المقدّمة: نسختنا تخالف الشقيق فعلًا — ولذلك كان الحارس القديم يصيح'
+  );
+  assert.equal(
+    atRiskOfErasure({ file: 'package.json', ours, theirs, base, me, you }),
+    false,
+    'ومع ذلك لا خطر: لم نغيّر شيئًا عن الأصل المشترك'
+  );
+});
+
+test('عملٌ حقيقيٌّ عندنا وليس عند الشقيق — يُوقَف كما يجب', () => {
+  const base = THEIRS('a && b');
+  const ours = OURS('a && b && سكربتُ إدارة تقنية المعلومات');
+  const theirs = THEIRS('a && b');
+  assert.equal(atRiskOfErasure({ file: 'package.json', ours, theirs, base, me, you }), true);
+});
+
+test('غيّرنا وغيّر الشقيق التغيير نفسه — فلا شيء يُفقد', () => {
+  const base = THEIRS('a && b');
+  const ours = OURS('a && b && c');
+  const theirs = THEIRS('a && b && c');
+  assert.equal(atRiskOfErasure({ file: 'package.json', ours, theirs, base, me, you }), false);
+});
+
+test('ملفٌّ لا نملكه لا يُعدّ خطرًا', () => {
+  assert.equal(
+    atRiskOfErasure({ file: 'package.json', ours: null, theirs: THEIRS('a'), base: THEIRS('a'), me, you }),
+    false
+  );
+});
+
 // ═══ حارس الانحراف على المستودع الحقيقيّ ══════════════════════════════════
 
 test('كلّ موضعٍ في الجدول موجودٌ على القرص — الجدول لا يذكر ملفًّا رحل', () => {
@@ -167,11 +221,51 @@ test('لم يتسرّب رمزٌ من هويّة الشقيق إلى أيّ مو
 });
 
 test('البطاقة وكتلة الدستور مطابقتان للمولَّد من workspace.json', () => {
+  // المقارنة بـ`lf` لا بالبايت: المولّد يكتب `\n` وgit يستخرج `\r\n` على ويندوز،
+  // فكان هذا الاختبار وحده يسقط أبدًا هناك — أحمرُ كاذبٌ يُعمي عن أحمرَ صادق.
   const doc = fs.readFileSync(path.join(root, 'WORKSPACE.md'), 'utf8');
-  assert.equal(doc, workspaceDoc(card), 'WORKSPACE.md مولَّد — العلاج: npm run identity:apply');
+  assert.equal(
+    lf(doc),
+    lf(workspaceDoc(card)),
+    'WORKSPACE.md مولَّد — العلاج: npm run identity:apply'
+  );
 
   const agents = fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8');
-  assert.equal(agents, replaceBlock(agents, agentsBlock(card)), 'كتلة الهويّة في AGENTS.md');
+  assert.equal(
+    lf(agents),
+    lf(replaceBlock(agents, agentsBlock(card))),
+    'كتلة الهويّة في AGENTS.md'
+  );
+});
+
+test('نهايةُ سطر ويندوز لا تُوهم الحارس باختلاف — CRLF وLF نصٌّ واحد', () => {
+  const doc = workspaceDoc(card);
+  const windows = doc.replace(/\n/g, '\r\n');
+  assert.notEqual(windows, doc, 'المحاكاة صنعت نصًّا مختلفًا بالبايت فعلًا');
+  assert.equal(lf(windows), lf(doc), 'وبعد التوحيد هما نصٌّ واحد');
+
+  // والمسار الحقيقيّ: دستورٌ بنهايات ويندوز وكتلةٌ مولَّدة بـLF — مزيجٌ يجب أن يمرّ.
+  const agents = lf(fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8')).replace(/\n/g, '\r\n');
+  assert.equal(
+    lf(agents),
+    lf(replaceBlock(agents, agentsBlock(card))),
+    'كتلة الهويّة في دستورٍ CRLF'
+  );
+});
+
+test('.gitattributes يُثبّت `eol=lf` للوثيقتين المولَّدتين — وإلّا عاد الأحمر الكاذب', () => {
+  // الحارس يسأل git نفسه لا يبحث عن نصٍّ في الملفّ: نمطٌ مكتوبٌ لا يُطابق
+  // (اسمٌ عربيّ أو مجلّدٌ خاطئ) يمرّ من فحص النصّ ويسقط من فحص الآليّة.
+  const generated = ['WORKSPACE.md', 'AGENTS.md'];
+  const out = execFileSync('git', ['check-attr', 'eol', '--', ...generated], {
+    cwd: root,
+    encoding: 'utf8',
+  });
+  const undeclared = out
+    .trim()
+    .split('\n')
+    .filter((line) => !line.endsWith(': lf'));
+  assert.deepEqual(undeclared, [], 'وثيقةٌ مولَّدة بلا `eol=lf` في .gitattributes');
 });
 
 /** امتداداتٌ لا نصَّ فيها — تُتجاوَز في المسح الشامل توفيرًا للوقت لا تسامحًا. */
