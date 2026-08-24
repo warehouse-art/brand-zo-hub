@@ -7,8 +7,9 @@
  *   · الجدول يُشتقّ من قيود العملية السحابيّة الملحقة-فقط مباشرةً — فجهازان
  *     على العمليّة نفسها يريان جدولًا واحدًا حيًّا بلا منطق توفيقٍ خاصّ
  *     (هذا ما احتاج في الأداة القديمة مئات الأسطر).
- *   · الكمّيّة الدفتريّة من **الماستر السحابيّ** لا من استيراد شيتٍ ثانٍ:
- *     الشيت يُستورد مرّةً في شاشة الأصناف، والجرد يقارن بالماستر.
+ *   · **ولا رصيد ولا فرق في هذه الشاشة** (CAP-101 · تحليل المالك 2026-08-23):
+ *     الالتقاط لا يُحاسِب. والماستر يأتي لاسمٍ وهويّةٍ وقاعدةِ عملٍ لا لرصيد.
+ *     والحساب كلّه لطبقة المطابقة — `docs/خطة-طبقة-الالتقاط.md`.
  *   · التصحيح والحذف **قيودُ فرقٍ** لا تعديل — التاريخ كامل: من عدّ ومن
  *     صحّح وبكم (نفس مبدأ دفتر الحركات).
  *
@@ -23,6 +24,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { lookupByBarcode, subscribeItems } from '../../../services/items/itemService.js';
 import { registerPending } from '../../../services/items/pendingService.js';
 import { buildItemIndexes } from '../../../services/items/uomWiring.js';
+import { uomLabel } from '../../../services/items/uomModel.js';
 import {
   createOperation,
   findOperationsByCode,
@@ -36,6 +38,10 @@ import {
 import {
   SCAN_MODES,
   panelForScan,
+  resolveScanUom,
+  barcodeCandidates,
+  scanUomChoices,
+  baseQtyPreview,
   scanEntryVerdict,
   sessionSummary,
   correctionEntry,
@@ -70,6 +76,9 @@ export default function ScanFlow() {
   const [items, setItems] = useState([]);
   const [panel, setPanel] = useState(null); // خانة التعبئة بعد المسح
   const [panelItem, setPanelItem] = useState(null);
+  const [panelUom, setPanelUom] = useState(''); // الوحدة التي اختارها العادّ (CAP-104)
+  const [collision, setCollision] = useState(null); // { code, candidates } — تصادمُ باركود (CAP-106)
+  const [panelCollision, setPanelCollision] = useState(false);
   const [qty, setQty] = useState('');
   const [newName, setNewName] = useState('');
   const [busy, setBusy] = useState(false);
@@ -100,7 +109,7 @@ export default function ScanFlow() {
     return () => unsub();
   }, []);
 
-  // الماستر السحابيّ — مصدر الاسم والكمّيّة الدفتريّة (لا استيراد شيتٍ ثانٍ).
+  // الماستر السحابيّ — مصدر الاسم والهويّة وقاعدة الجرد. ولا رصيد يُقرأ منه (CAP-101).
   useEffect(() => subscribeItems(setItems, () => setItems([])), []);
   const itemIndexes = useMemo(() => buildItemIndexes(items), [items]);
 
@@ -187,6 +196,9 @@ export default function ScanFlow() {
     [scans, items, lookupMap, withBaseline]
   );
   const progress = useMemo(() => sessionProgress(rows), [rows]);
+  // وحدات هذا الصنف ومعاينة الأساس — الحكم في النواة، والشاشة تعرضه (CAP-104).
+  const uomChoices = useMemo(() => scanUomChoices(panelItem), [panelItem]);
+  const basePreview = useMemo(() => baseQtyPreview(panelItem, qty, panelUom), [panelItem, qty, panelUom]);
   const filteredRows = useMemo(
     () => filterRows(rows, { tab: tableFilter, term: tableTerm }),
     [rows, tableFilter, tableTerm]
@@ -202,10 +214,10 @@ export default function ScanFlow() {
         { id: 'unscanned', label: `لم يُمسح (${int(progress.remaining)})` }
       );
     }
-    t.push(
-      { id: 'diff', label: `الفروقات (${int(progress.diffs)})` },
-      { id: 'unknown', label: `غير معرّف (${int(progress.unknown)})` }
-    );
+    // لا تبويب «فروقات» (CAP-101): الفرق حكمُ طبقة المطابقة لا شاشة العدّ.
+    t.push({ id: 'unknown', label: `غير معرّف (${int(progress.unknown)})` });
+    // ما يُحسم في المراجعة قبل الختم (ق-٢ · CAP-105) — يظهر حين يوجد فقط.
+    if (progress.needsUom) t.push({ id: 'needsUom', label: `بلا وحدة (${int(progress.needsUom)})` });
     return t;
   }, [rows.length, progress, withBaseline]);
 
@@ -236,6 +248,17 @@ export default function ScanFlow() {
       flash('err', 'اختر الوضع أوّلًا: جرد أو استلام أو صرف.');
       return;
     }
+    // ★ التصادم يُكشف **قبل** أيّ حسم (CAP-106): باركودٌ يطابق أكثر من صنف
+    //   يُعرض خيارًا، ولا يُختار عن العادّ أوّلُ مطابقةٍ صامتةً.
+    const candidates = barcodeCandidates(code, items);
+    if (candidates.length > 1) {
+      setCollision({ code, candidates });
+      setPanel(null);
+      setPanelItem(null);
+      if (scanInputRef.current) scanInputRef.current.value = '';
+      return;
+    }
+
     let item = null;
     try {
       item = await lookupByBarcode(code);
@@ -245,10 +268,19 @@ export default function ScanFlow() {
     if (!item && items.length) {
       item = fiveStepItemSearch(code, { items })?.item || null;
     }
+    openPanel(code, item, false);
+  }
+
+  /** يفتح خانة التعبئة على صنفٍ محسوم — مسارٌ واحد للمسح ولفصل التصادم. */
+  function openPanel(code, item, fromCollision) {
     // الاستبانة بالاسم تفتح الخانة بباركود الصنف الحقيقيّ لا بالنصّ المكتوب.
     const panelCode = item && !/^\d/.test(code) ? (item.barcodes?.[0] || item.sku) : code;
-    setPanel(panelForScan(panelCode, item));
+    const built = panelForScan(panelCode, item);
+    setCollision(null);
+    setPanel(built);
     setPanelItem(item);
+    setPanelUom(built.unit); // الوحدة المحلولة من الباركود هي المقترحة
+    setPanelCollision(Boolean(fromCollision));
     setQty('');
     setNewName('');
     if (scanInputRef.current) scanInputRef.current.value = '';
@@ -274,7 +306,21 @@ export default function ScanFlow() {
       for (const code of codes) {
         const item = lookupMap.get(code) || null;
         const name = item ? [item.nameAr, item.shade].filter(Boolean).join(' — ') : '';
-        await appendScan(id, { barcode: code, name, qty: 1, opType: mode, profile: me });
+        // اللصق يمرّ بالوحدة نفسها التي يمرّ بها المسح (CAP-103): باركود
+        // كرتونٍ ملصوقٌ يعني كرتونًا، ولو كُتب قيدُه بلا وحدةٍ لصار قطعةً.
+        const { unit, factor } = resolveScanUom(code, item);
+        await appendScan(id, {
+          barcode: code,
+          sku: item ? String(item.sku ?? '').trim() : '',
+          name,
+          qty: 1,
+          uom: unit,
+          factor,
+          baseQty: factor === null ? null : factor, // الكمّيّة ١، فالأساس هو المعامل
+          uomMissing: Boolean(item) && !unit,
+          opType: mode,
+          profile: me,
+        });
         saved += 1;
       }
       setBulkText('');
@@ -296,6 +342,8 @@ export default function ScanFlow() {
       qty,
       name: newName,
       item: panelItem,
+      uom: panelUom,
+      collision: panelCollision,
     });
     if (!verdict.ok) {
       flash('err', verdict.problems.join(' · '));
@@ -314,9 +362,18 @@ export default function ScanFlow() {
       }
       const s = sessionSummary([...scans, verdict.entry]);
       updateOperationSummary(id, { itemCount: s.itemCount, scannedCount: s.scanCount }).catch(() => {});
-      flash('ok', `حُفظ: ${verdict.entry.name} × ${num(verdict.entry.qty)}`);
+      // التأكيد يقول ما حُفظ بوحدته وما يعادله بالأساس — فيُكشف الخطأ فورًا.
+      const e = verdict.entry;
+      const unit = e.uom ? ` ${uomLabel(e.uom)}` : '';
+      const equiv =
+        e.baseQty != null && e.uom && e.uom !== panel.baseUom
+          ? ` (= ${num(e.baseQty)} ${uomLabel(panel.baseUom)})`
+          : '';
+      flash('ok', `حُفظ: ${e.name} × ${num(e.qty)}${unit}${equiv}`);
       setPanel(null);
       setPanelItem(null);
+      setPanelUom('');
+      setPanelCollision(false);
       setQty('');
       setNewName('');
       setTimeout(() => scanInputRef.current?.focus(), 50);
@@ -344,13 +401,19 @@ export default function ScanFlow() {
   }
 
   function askCorrection(row) {
-    const raw = window.prompt(`الكمّيّة الصحيحة لـ«${row.name || row.barcode}»؟ (المعدود الآن ${num(row.countedQty)})`, String(row.countedQty));
+    // التصحيح يُقال بوحدة الأساس — فتُسمّى في السؤال، لا يُترك رقمٌ بلا وحدة.
+    const unit = row.baseUom ? ` ${uomLabel(row.baseUom)}` : '';
+    const raw = window.prompt(
+      `الكمّيّة الصحيحة لـ«${row.name || row.barcode}»؟ (المعدود الآن ${num(row.countedQty)}${unit})`,
+      String(row.countedQty)
+    );
     if (raw === null) return;
     correctRow(row, raw);
   }
 
   function askRemoval(row) {
-    if (!window.confirm(`حذف «${row.name || row.barcode}» من الجلسة؟ يُكتب قيدُ عكسٍ (−${num(row.countedQty)}) ويبقى الأثر.`)) return;
+    const unit = row.baseUom ? ` ${uomLabel(row.baseUom)}` : '';
+    if (!window.confirm(`حذف «${row.name || row.barcode}» من الجلسة؟ يُكتب قيدُ عكسٍ (−${num(row.countedQty)}${unit}) ويبقى الأثر.`)) return;
     correctRow(row, 0);
   }
 
@@ -684,6 +747,45 @@ ${inviteLink}`)}` : undefined}
         </div>
       )}
 
+      {/* ٣أ — تصادمُ باركود: الشاشة تسأل ولا تختار (CAP-106) */}
+      {collision && (
+        <div className="o_ds_card o_ds_pad" style={{ marginBottom: '14px', borderInlineStart: '4px solid var(--o-text-warning, #8a6d1b)' }}>
+          <p style={{ margin: '0 0 4px', fontSize: '11px', color: 'var(--o-main-color-muted)' }}>
+            باركودٌ واحد، أكثرُ من صنف
+            <span style={{ marginInlineStart: '8px', fontFamily: 'monospace', direction: 'ltr', display: 'inline-block' }}>{collision.code}</span>
+          </p>
+          <p style={{ margin: '0 0 10px', fontSize: 'var(--o-font-size-sm)', fontWeight: 'var(--o-font-weight-bold)' }}>
+            أيُّهما على الرفّ أمامك؟ — لن يُختار عنك.
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            {collision.candidates.map((it) => (
+              <button
+                key={it.sku}
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => openPanel(collision.code, it, true)}
+                style={{ textAlign: 'right', padding: '10px 12px' }}
+              >
+                <span style={{ fontWeight: 'var(--o-font-weight-bold)' }}>
+                  {[it.nameAr, it.shade].filter(Boolean).join(' — ') || it.sku}
+                </span>
+                <span style={{ marginInlineStart: '8px', fontFamily: 'monospace', fontSize: 'var(--o-font-size-xs)', color: 'var(--o-main-color-muted)' }}>
+                  {it.sku}
+                </span>
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            className="btn btn-link btn-sm"
+            onClick={() => { setCollision(null); setTimeout(() => scanInputRef.current?.focus(), 50); }}
+            style={{ marginTop: '6px', padding: 0 }}
+          >
+            إلغاء هذا المسح
+          </button>
+        </div>
+      )}
+
       {/* ٣ — خانة التعبئة */}
       {panel && (
         <div className="o_ds_card o_ds_pad" style={{ marginBottom: '14px', borderInlineStart: '4px solid var(--o-brand-primary, #714B67)' }}>
@@ -737,20 +839,42 @@ ${inviteLink}`)}` : undefined}
               }}
               style={{ flex: 1, fontSize: '20px', padding: '12px', textAlign: 'center' }}
             />
-            {panel.unitLabel && (
-              <span style={{ fontSize: 'var(--o-font-size-sm)', color: 'var(--o-main-color-muted)', whiteSpace: 'nowrap' }}>
-                {panel.unitLabel}
-              </span>
+            {/* الوحدة تُختار من وحدات الصنف وحدها — لا خانةَ نصّ (CAP-104) */}
+            {uomChoices.length > 1 ? (
+              <select
+                className="o_input"
+                aria-label="وحدة العدّ"
+                value={panelUom}
+                onChange={(e) => setPanelUom(e.target.value)}
+                style={{ fontSize: 'var(--o-font-size-sm)', padding: '10px', maxWidth: '46%' }}
+              >
+                {uomChoices.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            ) : (
+              panel.unitLabel && (
+                <span style={{ fontSize: 'var(--o-font-size-sm)', color: 'var(--o-main-color-muted)', whiteSpace: 'nowrap' }}>
+                  {panel.unitLabel}
+                </span>
+              )
             )}
             <button type="button" className="btn btn-primary" onClick={save} disabled={busy} style={{ padding: '12px 22px', fontSize: '16px' }}>
               {busy ? 'جارٍ…' : 'حفظ'}
             </button>
           </div>
 
+          {/* أثرُ الوحدة يُرى قبل الحفظ لا بعده (CAP-104) */}
+          {basePreview && (
+            <p style={{ margin: '6px 0 0', fontSize: 'var(--o-font-size-xs)', color: 'var(--o-main-color-muted)' }}>
+              {basePreview}
+            </p>
+          )}
+
           <button
             type="button"
             className="btn btn-link btn-sm"
-            onClick={() => { setPanel(null); setPanelItem(null); setTimeout(() => scanInputRef.current?.focus(), 50); }}
+            onClick={() => { setPanel(null); setPanelItem(null); setPanelUom(''); setPanelCollision(false); setTimeout(() => scanInputRef.current?.focus(), 50); }}
             style={{ marginTop: '6px', padding: 0 }}
           >
             إلغاء هذا المسح
@@ -854,9 +978,9 @@ ${inviteLink}`)}` : undefined}
                   <thead>
                     <tr style={{ textAlign: 'right', color: 'var(--o-main-color-muted)' }}>
                       <th style={{ padding: '4px 6px' }}>الصنف</th>
-                      <th style={{ padding: '4px 6px' }}>الدفتريّ</th>
                       <th style={{ padding: '4px 6px' }}>المعدود</th>
-                      <th style={{ padding: '4px 6px' }}>الفرق</th>
+                      <th style={{ padding: '4px 6px' }}>الوحدة</th>
+                      <th style={{ padding: '4px 6px' }}>القيود</th>
                       <th style={{ padding: '4px 6px' }} aria-label="إجراءات" />
                     </tr>
                   </thead>
@@ -881,19 +1005,31 @@ ${inviteLink}`)}` : undefined}
                             {r.barcode}
                           </div>
                         </td>
-                        <td style={{ padding: '6px', fontVariantNumeric: 'tabular-nums' }}>{r.bookQty === null ? '—' : num(r.bookQty)}</td>
                         <td style={{ padding: '6px', fontVariantNumeric: 'tabular-nums', fontWeight: 'var(--o-font-weight-bold)' }}>
                           {r.scanned ? num(r.countedQty) : '—'}
+                          {r.uncertain && (
+                            <span
+                              title="فيه قيدٌ بوحدةٍ لم يُعرَّف معاملها — المجموع بوحدة الأساس غير مضمون"
+                              style={{ marginInlineStart: '4px', fontSize: '10px', color: 'var(--o-text-warning, #8a6d1b)' }}
+                            >
+                              غير مضمون
+                            </span>
+                          )}
                         </td>
-                        <td
-                          style={{
-                            padding: '6px',
-                            fontVariantNumeric: 'tabular-nums',
-                            color: r.diff === null || r.diff === 0 ? 'var(--o-main-color-muted)' : 'var(--o-text-danger, #b3261e)',
-                            fontWeight: r.diff ? 'var(--o-font-weight-bold)' : undefined,
-                          }}
-                        >
-                          {r.diff === null ? '—' : num(r.diff)}
+                        <td style={{ padding: '6px', color: 'var(--o-main-color-muted)' }}>
+                          {r.baseUom ? (
+                            uomLabel(r.baseUom)
+                          ) : (
+                            <span
+                              title="بلا وحدة أساس — عُدّ وحُفظ، ويُحسم في المراجعة قبل الختم (ق-٢)"
+                              style={{ color: 'var(--o-text-warning, #8a6d1b)' }}
+                            >
+                              بلا وحدة
+                            </span>
+                          )}
+                        </td>
+                        <td style={{ padding: '6px', fontVariantNumeric: 'tabular-nums', color: 'var(--o-main-color-muted)' }}>
+                          {r.scanned ? int(r.scanCount) : '—'}
                         </td>
                         <td style={{ padding: '6px', whiteSpace: 'nowrap' }}>
                           {r.scanned ? (
@@ -924,7 +1060,7 @@ ${inviteLink}`)}` : undefined}
             </>
           )}
           <p style={{ margin: '8px 0 0', fontSize: '10px', color: 'var(--o-main-color-muted)' }}>
-            الدفتريّ من ماستر الأصناف · التصحيح والحذف قيودُ فرقٍ تبقى في السجلّ
+            هذه الشاشة تلتقط ما على الرفّ ولا تُحاسِب — لا رصيد ولا فرق · التصحيح والحذف قيودُ فرقٍ تبقى في السجلّ
           </p>
         </div>
       ) : null}
