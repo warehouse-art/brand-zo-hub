@@ -9,9 +9,9 @@
     "desktop": "Tauri (src-tauri)"
   },
   "counts": {
-    "modules": 100,
+    "modules": 103,
     "serviceDomains": 45,
-    "serviceFiles": 435,
+    "serviceFiles": 437,
     "collections": 82,
     "roles": 18,
     "odooModels": 12,
@@ -70,6 +70,14 @@
         "assets",
         "ui"
       ]
+    },
+    {
+      "name": "bin-assignment",
+      "route": "/dashboard/bin-assignment",
+      "title": "إسناد الأصناف إلى المواقع",
+      "summary": "إسناد الأصناف إلى مواقعها ‹LOC› — قالبٌ يُرفع فيُعرف أين كلّ صنف.",
+      "file": "src/pages/dashboard/bin-assignment.astro",
+      "usesServices": []
     },
     {
       "name": "branch-order",
@@ -429,6 +437,14 @@
       "usesServices": []
     },
     {
+      "name": "my-tasks",
+      "route": "/dashboard/my-tasks",
+      "title": "مهامي",
+      "summary": "«مهامي» — شاشة تنفيذ التخزين والسحب على جهاز العامل ‹LOC-402›.",
+      "file": "src/pages/dashboard/my-tasks.astro",
+      "usesServices": []
+    },
+    {
       "name": "nova-inventory-meeting",
       "route": "/dashboard/nova-inventory-meeting",
       "title": "اجتماع شركة نوفا — خطة الجرد والنقل",
@@ -506,6 +522,14 @@
       "title": "الأرشيف الدوريّ",
       "summary": "الأرشيف الدوريّ — التقارير ومحاضر الاجتماعات.",
       "file": "src/pages/dashboard/periodic-archive.astro",
+      "usesServices": []
+    },
+    {
+      "name": "pick-plan",
+      "route": "/dashboard/pick-plan",
+      "title": "خطّة السحب",
+      "summary": "خطّة السحب — «نرفق الأكواد فيظهر مكانه» (طلب المالك 2026-08-24).",
+      "file": "src/pages/dashboard/pick-plan.astro",
       "usesServices": []
     },
     {
@@ -2555,6 +2579,8 @@
       "domain": "locations",
       "dir": "src/services/locations",
       "files": [
+        "binAssignment.js",
+        "binAssignment.test.js",
         "facilityModel.js",
         "facilityModel.test.js",
         "locationCode.js",
@@ -2581,8 +2607,8 @@
         "travelGrid.test.js",
         "warehouseService.js"
       ],
-      "fileCount": 25,
-      "testCount": 11,
+      "fileCount": 27,
+      "testCount": 12,
       "exports": [
         "CAPACITY_MEASURES",
         "CELL_ALERTS",
@@ -2624,6 +2650,8 @@
         "applyScan",
         "applyWorkLayer",
         "archiveLocation",
+        "assignmentNotes",
+        "assignmentReport",
         "balanceLocationCode",
         "batchScanVerdict",
         "binCellVerdict",
@@ -2643,6 +2671,7 @@
         "countScheme",
         "detectLevel",
         "deviationReport",
+        "directablePct",
         "emptyDocument",
         "emptyLine",
         "expandScheme",
@@ -2699,6 +2728,7 @@
         "referenceCoverage",
         "removeManualLine",
         "routeDistance",
+        "rowBin",
         "saveLocation",
         "saveLocationsBulk",
         "scanVerdict",
