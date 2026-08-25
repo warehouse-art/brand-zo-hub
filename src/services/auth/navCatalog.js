@@ -196,6 +196,14 @@ export const NAV_GROUPS = [
       // يُدرَج له برجُ القطاع لاحقًا (تقاريرُ مجمَّعةٌ ليست له)، فالحصر ببنوده
       // لا بالمجموعة — نفس نمط «إدارة الحركة» مع مشرف المناولة.
       { path: '/dashboard/branch-order', label: 'طلب الفرع', icon: 'shoppingCart', roles: ['admin', 'warehouse_manager', 'fnb_manager', 'branch_manager'] },
+      // ‹FNB-502…504› دورة الإنتاج: الشيف صاحبها — يخطّط بالوصفة ويقيس الـYield
+      // ويخصّص على الفروع. و**مدير الفرع لا يُدرَج**: هو من يستلم لا من يوزّع،
+      // وشاشةٌ تقسم الإنتاج بين الفروع ليست بيد أحدها.
+      { path: '/dashboard/production', label: 'دورة الإنتاج', icon: 'factory', roles: ['admin', 'warehouse_manager', 'fnb_manager', 'executive_chef'] },
+      // ‹FNB-801…804› برج القطاع: تقاريرُ مجمَّعةٌ عبر الفروع — **ومدير الفرع
+      // لا يُدرَج** (نصّ FNB-302: «ولا يُدرَج له برجُ القطاع لاحقًا»)، فمن
+      // يرى فروعَ غيره يقرأ ما لا يخصّه.
+      { path: '/dashboard/sector-tower', label: 'برج القطاع', icon: 'layers', roles: ['admin', 'warehouse_manager', 'fnb_manager', 'executive_chef'] },
     ],
   },
   {

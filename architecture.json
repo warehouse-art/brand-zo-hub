@@ -9,9 +9,9 @@
     "desktop": "Tauri (src-tauri)"
   },
   "counts": {
-    "modules": 103,
+    "modules": 105,
     "serviceDomains": 45,
-    "serviceFiles": 437,
+    "serviceFiles": 441,
     "collections": 82,
     "roles": 18,
     "odooModels": 12,
@@ -583,6 +583,14 @@
       "usesServices": []
     },
     {
+      "name": "production",
+      "route": "/dashboard/production",
+      "title": "دورة الإنتاج",
+      "summary": "دورة الإنتاج ‹FNB-502 · FNB-503 · FNB-504› — ثالث شاشات قطاع الأغذية.",
+      "file": "src/pages/dashboard/production.astro",
+      "usesServices": []
+    },
+    {
       "name": "products",
       "route": "/dashboard/products",
       "title": "إدارة الأصناف",
@@ -698,6 +706,14 @@
       "title": "عروض القطاعات التشغيلية",
       "summary": "",
       "file": "src/pages/dashboard/sector-presentations.astro",
+      "usesServices": []
+    },
+    {
+      "name": "sector-tower",
+      "route": "/dashboard/sector-tower",
+      "title": "برج القطاع",
+      "summary": "برج القطاع ‹FNB-801…804 · FNB-703 · FNB-704› — رابعُ شاشات قطاع الأغذية.",
+      "file": "src/pages/dashboard/sector-tower.astro",
       "usesServices": []
     },
     {
@@ -2088,6 +2104,8 @@
         "pendingService.js",
         "productionBatch.js",
         "productionBatch.test.js",
+        "productionReading.js",
+        "productionReading.test.js",
         "recipe.js",
         "recipe.test.js",
         "recipesService.js",
@@ -2098,8 +2116,8 @@
         "uomWiring.js",
         "uomWiring.test.js"
       ],
-      "fileCount": 24,
-      "testCount": 10,
+      "fileCount": 26,
+      "testCount": 11,
       "exports": [
         "BATCH_PREFIX",
         "DEFAULT_ITEM_TYPE",
@@ -2163,6 +2181,7 @@
         "isMovable",
         "isSellable",
         "isStocked",
+        "issuedBySku",
         "itemChain",
         "itemForLine",
         "itemQuantities",
@@ -2172,6 +2191,7 @@
         "itemUomProblems",
         "lineMatchesItem",
         "lineType",
+        "linkedProduction",
         "listenPending",
         "listenRecipes",
         "loadableProblems",
@@ -2192,7 +2212,10 @@
         "parseUomFactors",
         "pendingId",
         "pendingSummary",
+        "producedBatches",
+        "producedBySku",
         "productionBatchNumber",
+        "qcVerdictFor",
         "receiptRouteWarnings",
         "receivesAtBranch",
         "recipeAsOf",
@@ -2230,7 +2253,8 @@
         "updateItem",
         "upsertItems",
         "yieldException",
-        "yieldOf"
+        "yieldOf",
+        "yieldRows"
       ],
       "collections": [
         "Items_Master",
@@ -2379,12 +2403,14 @@
         "stockStatus.js",
         "stockStatus.test.js",
         "supplierPayment.test.js",
+        "towerReading.js",
+        "towerReading.test.js",
         "transferReports.js",
         "transferReports.test.js",
         "vehicle.test.js"
       ],
-      "fileCount": 40,
-      "testCount": 18,
+      "fileCount": 42,
+      "testCount": 19,
       "exports": [
         "ACCOUNT_LOCATIONS",
         "AGING_BUCKETS",
@@ -2439,6 +2465,7 @@
         "balanceOf",
         "balances",
         "boardRows",
+        "branchPositions",
         "bucketOf",
         "buildLedgerCard",
         "buildMoves",
@@ -2450,6 +2477,7 @@
         "chainCompleteness",
         "classifyOrder",
         "closeException",
+        "closeRecords",
         "closeVerdict",
         "closeoutBalance",
         "closeoutEntry",
@@ -2457,6 +2485,7 @@
         "compareMoves",
         "computeKpis",
         "correctionDraft",
+        "costOwnership",
         "creditCheck",
         "customerCodeFromLocation",
         "customerExposure",
