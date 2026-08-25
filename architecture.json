@@ -9,9 +9,9 @@
     "desktop": "Tauri (src-tauri)"
   },
   "counts": {
-    "modules": 97,
+    "modules": 100,
     "serviceDomains": 45,
-    "serviceFiles": 433,
+    "serviceFiles": 435,
     "collections": 82,
     "roles": 18,
     "odooModels": 12,
@@ -70,6 +70,14 @@
         "assets",
         "ui"
       ]
+    },
+    {
+      "name": "branch-order",
+      "route": "/dashboard/branch-order",
+      "title": "طلب الفرع",
+      "summary": "طلب الفرع ‹FNB-302 · FNB-303› — ثاني شاشات قطاع الأغذية.",
+      "file": "src/pages/dashboard/branch-order.astro",
+      "usesServices": []
     },
     {
       "name": "business-continuity",
@@ -369,6 +377,14 @@
       "usesServices": []
     },
     {
+      "name": "location-builder",
+      "route": "/dashboard/location-builder",
+      "title": "بانية مواقع التخزين",
+      "summary": "بانية مواقع التخزين — «نظام إضافة أماكن أوتوماتيك» (طلب المالك 2026-08-24).",
+      "file": "src/pages/dashboard/location-builder.astro",
+      "usesServices": []
+    },
+    {
       "name": "logistics-dashboard",
       "route": "/dashboard/logistics-dashboard",
       "title": "لوحة اللوجستيات التنفيذيّة",
@@ -564,6 +580,14 @@
       "title": "أوامر الاستلام — الشاشة التجريبية",
       "summary": "",
       "file": "src/pages/dashboard/receipts.astro",
+      "usesServices": []
+    },
+    {
+      "name": "recipes",
+      "route": "/dashboard/recipes",
+      "title": "دفتر الوصفات",
+      "summary": "دفتر الوصفات ‹FNB-501› — أولى شاشات قطاع الأغذية.",
+      "file": "src/pages/dashboard/recipes.astro",
       "usesServices": []
     },
     {
@@ -2535,6 +2559,8 @@
         "facilityModel.test.js",
         "locationCode.js",
         "locationCode.test.js",
+        "locationScheme.js",
+        "locationScheme.test.js",
         "locationsModel.js",
         "locationsModel.test.js",
         "locationsService.js",
@@ -2555,8 +2581,8 @@
         "travelGrid.test.js",
         "warehouseService.js"
       ],
-      "fileCount": 23,
-      "testCount": 10,
+      "fileCount": 25,
+      "testCount": 11,
       "exports": [
         "CAPACITY_MEASURES",
         "CELL_ALERTS",
@@ -2578,8 +2604,11 @@
         "LOCATIONS_ROLES",
         "LOCATION_STATUSES",
         "MAP_LEGEND",
+        "MAX_GENERATED",
+        "MAX_SEGMENT_LEN",
         "MIN_SEGMENTS",
         "POINT_SOURCE",
+        "SCHEME_LEVELS",
         "SEGMENT_SEPARATOR",
         "STATUS_LABELS",
         "STORAGE_TYPES",
@@ -2611,10 +2640,12 @@
         "classifyRows",
         "commitSourceImport",
         "contentFingerprint",
+        "countScheme",
         "detectLevel",
         "deviationReport",
         "emptyDocument",
         "emptyLine",
+        "expandScheme",
         "facilityTypeOf",
         "facilityWarnings",
         "fefoLocationViolations",
@@ -2634,6 +2665,7 @@
         "kitchenZoneGaps",
         "kitchenZoneSeed",
         "levelIndexOf",
+        "levelValues",
         "listenLocations",
         "locationCodeProblem",
         "locationLabelOf",
@@ -2657,6 +2689,7 @@
         "pickPlan",
         "pickPostingProblems",
         "planLine",
+        "previewScheme",
         "producesGoods",
         "productionUnits",
         "qtyDeviation",
@@ -2669,11 +2702,14 @@
         "saveLocation",
         "saveLocationsBulk",
         "scanVerdict",
+        "schemeProblems",
         "scoreLocation",
         "sealManualFingerprints",
         "sellableStock",
         "setLocationStatus",
+        "shapeLevel",
         "shapeLocation",
+        "shapeScheme",
         "shortLabelOf",
         "splitByLocation",
         "statusLabel",
@@ -2683,6 +2719,7 @@
         "summarizeWork",
         "toCountDraft",
         "toDocumentDraft",
+        "toLocationInputs",
         "travelDistance",
         "variances",
         "warehouseCodesOf",

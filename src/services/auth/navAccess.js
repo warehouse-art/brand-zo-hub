@@ -15,7 +15,9 @@ export const NAV_GROUP_LABELS = {
   daily: 'العمليات اليومية',
   warehouses: 'المستودعات والجرد',
   fleet: 'إدارة الحركة',
+  putaway: 'التخزين الموجّه',
   field: 'الميدان والبيع من المركبة',
+  fnb: 'قطاع الأغذية',
   odoo: 'دورات أودو والمحاكاة',
   reports: 'مركز التقارير',
   presentations: 'العروض والاجتماعات',
@@ -31,9 +33,9 @@ export const NAV_GROUP_LABELS = {
 export const ROLE_NAV = {
   // ‹تدقيق 24.08› «العروض والاجتماعات» خرجت من «مركز التقارير» — تُمنح لمن
   // كان يملك عناصرها هناك بعينهم: المديران، والماليّ لعرض جلسته وحدها.
-  admin: ['daily', 'warehouses', 'fleet', 'field', 'odoo', 'reports', 'presentations', 'archive', 'dept', 'procurement'],
-  warehouse_manager: ['daily', 'warehouses', 'fleet', 'field', 'odoo', 'reports', 'presentations', 'archive', 'dept', 'procurement'],
-  storekeeper: ['daily', 'warehouses', 'odoo'],
+  admin: ['daily', 'warehouses', 'putaway', 'fleet', 'field', 'fnb', 'odoo', 'reports', 'presentations', 'archive', 'dept', 'procurement'],
+  warehouse_manager: ['daily', 'warehouses', 'putaway', 'fleet', 'field', 'fnb', 'odoo', 'reports', 'presentations', 'archive', 'dept', 'procurement'],
+  storekeeper: ['daily', 'warehouses', 'putaway', 'odoo'],
   qc_inspector: ['daily', 'odoo', 'reports'],
   // ‹EXE-602› ضابط البوابة يدخل «إدارة الحركة» — فيها تبويب الساحة والأبواب.
   // كان الدور قائمًا منذ البداية **بلا نظامٍ يخدمه**: يوقّع تصاريح الخروج ولا
@@ -45,7 +47,7 @@ export const ROLE_NAV = {
   // المدير المالي: يعتمد الطلب والترسية والأمر والصرف في الدورة.
   finance_manager: ['warehouses', 'odoo', 'reports', 'presentations', 'procurement'],
   return_manager: ['daily', 'warehouses', 'odoo'],
-  inventory_auditor: ['warehouses', 'odoo', 'reports'],
+  inventory_auditor: ['warehouses', 'putaway', 'odoo', 'reports'],
   viewer: ['reports'],
   // مستخدم الإدارة (الجهة الطالبة/المستفيد): طلبات الإدارات + إصدار طلب المشتريات.
   department_user: ['dept', 'procurement'],
@@ -53,8 +55,10 @@ export const ROLE_NAV = {
   fleet: ['fleet'],
   // أمين الخزينة: دورٌ مركّز على صرف قيمة أوامر الشراء في الدورة وحدها.
   treasury: ['procurement'],
-  // مشرف المناولة: لوحة عمالة الشحن/التفريغ ضمن إدارة الحركة.
-  labor_supervisor: ['fleet'],
+  // مشرف المناولة: لوحة عمالة الشحن/التفريغ. انتقلت معها من «إدارة
+  // الحركة» إلى «التخزين الموجّه» — ولو بقي على `fleet` لرأى مجموعةً فارغة:
+  // لا المركبات ولا الصيانة ولا العُهد من عمله. ويبقى **مركّزًا**.
+  labor_supervisor: ['putaway'],
   // مندوب المبيعات: مجموعة الميدان وحدها. **لا `fleet`** — وإلّا رأى مركز
   // الصيانة وعمالة الشحن وجرد المركبات، ولا شأن له بها. مجموعةٌ مستقلّة أنظف
   // من تقييد كلّ بندٍ في «إدارة الحركة» على حدة، وهي موضع ما سيأتي من الميدان
@@ -66,14 +70,16 @@ export const ROLE_NAV = {
   // مدير القطاع **صاحب المدخل**: يُدخل شجرته (الأبعاد التنظيميّة في
   // «التقارير») ويقرأ طلبات فروعه واستهلاكها. **لا `warehouses`**: لا يقيّد
   // حركةً ولا يعتمد صرفًا — نفس منطق حصر المندوب في «الميدان».
-  fnb_manager: ['reports', 'daily'],
+  fnb_manager: ['reports', 'daily', 'fnb'],
   // مدير الفرع **مصدر بيانات**: يطلب ويستلم ويسجّل الهدر والجرد المختصر —
   // العمليّات اليوميّة وحدها، ولا يرى تقارير القطاع المجمَّعة.
-  branch_manager: ['daily'],
+  // ‹FNB-302› أُضيفت `fnb` حين صارت له شاشة **طلب الفرع** — وهو صاحبها
+  // الأوّل. فصار يرى مجموعتين، ومن ثمّ اللوحة الرئيسيّة (كان مركّزًا).
+  branch_manager: ['daily', 'fnb'],
   // الشيف التنفيذيّ ‹FNB-502 · ق-O05›: يملك الوصفة وأمر الإنتاج، فيرى
   // «المستودعات» (حيث دورة الإنتاج والمستندات) و«التقارير» (Yield والاستهلاك
   // النظريّ). ولا `admin`: معايير الإنتاج له، والهيكل والصلاحيّات ليست له.
-  executive_chef: ['warehouses', 'reports'],
+  executive_chef: ['warehouses', 'reports', 'fnb'],
 };
 
 /** هل يرى هذا الدور مجموعة القائمة؟ */
