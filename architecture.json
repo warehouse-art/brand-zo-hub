@@ -9,10 +9,10 @@
     "desktop": "Tauri (src-tauri)"
   },
   "counts": {
-    "modules": 105,
-    "serviceDomains": 45,
-    "serviceFiles": 443,
-    "collections": 82,
+    "modules": 116,
+    "serviceDomains": 51,
+    "serviceFiles": 562,
+    "collections": 97,
     "roles": 18,
     "odooModels": 12,
     "odooGuards": 51,
@@ -70,6 +70,14 @@
         "assets",
         "ui"
       ]
+    },
+    {
+      "name": "barcode-center",
+      "route": "/dashboard/barcode-center",
+      "title": "مركز الباركود",
+      "summary": "مركز الباركود ‹LPN-720› — توليدٌ وطباعةٌ وسجلٌّ وتدقيق.",
+      "file": "src/pages/dashboard/barcode-center.astro",
+      "usesServices": []
     },
     {
       "name": "bin-assignment",
@@ -198,6 +206,14 @@
       "usesServices": []
     },
     {
+      "name": "dock-operations",
+      "route": "/dashboard/dock-operations",
+      "title": "الأبواب والبوّابة",
+      "summary": "الأبواب والبوّابة ‹LPN-722› — تحميلٌ وخروجٌ واستلامٌ بالمسح.",
+      "file": "src/pages/dashboard/dock-operations.astro",
+      "usesServices": []
+    },
+    {
       "name": "document",
       "route": "/dashboard/document",
       "title": "مستند",
@@ -272,6 +288,22 @@
       "title": "اختار وظيفتك",
       "summary": "The 13 operational forms shipped under public/forms/. They are static HTML",
       "file": "src/pages/dashboard/forms.astro",
+      "usesServices": []
+    },
+    {
+      "name": "gate-log",
+      "route": "/dashboard/gate-log",
+      "title": "سجلّ البوابة والمطابقة",
+      "summary": "سجلُّ البوابة والمطابقة — حيث تصير البوّابةُ نقطةَ تحقّقٍ مستقلّة.",
+      "file": "src/pages/dashboard/gate-log.astro",
+      "usesServices": []
+    },
+    {
+      "name": "gate-post",
+      "route": "/dashboard/gate-post",
+      "title": "مركز البوابة",
+      "summary": "مركزُ البوابة — الشاشةُ التي يفتحها الحارسُ على الحاجز.",
+      "file": "src/pages/dashboard/gate-post.astro",
       "usesServices": []
     },
     {
@@ -401,6 +433,38 @@
       "usesServices": []
     },
     {
+      "name": "lpn-count",
+      "route": "/dashboard/lpn-count",
+      "title": "جرد الطبالي",
+      "summary": "جردُ الطبالي — شهادةُ رؤيةٍ بلا كمّيّات.",
+      "file": "src/pages/dashboard/lpn-count.astro",
+      "usesServices": []
+    },
+    {
+      "name": "lpn-governance",
+      "route": "/dashboard/lpn-governance",
+      "title": "حوكمة الطبالي",
+      "summary": "حوكمة الطبالي — البوّابة بين «قرأتُ» و«صار مخزونًا».",
+      "file": "src/pages/dashboard/lpn-governance.astro",
+      "usesServices": []
+    },
+    {
+      "name": "lpn-picking",
+      "route": "/dashboard/lpn-picking",
+      "title": "التحضير الميدانيّ",
+      "summary": "التحضير الميدانيّ — مهمّةٌ تُمشى بالمسح الثلاثيّ خطوةً خطوة.",
+      "file": "src/pages/dashboard/lpn-picking.astro",
+      "usesServices": []
+    },
+    {
+      "name": "lpn-receiving",
+      "route": "/dashboard/lpn-receiving",
+      "title": "الاستلام الميدانيّ",
+      "summary": "الاستلام الميدانيّ — من أمر شراءٍ مفتوح إلى طبليةٍ ترفع للحوكمة.",
+      "file": "src/pages/dashboard/lpn-receiving.astro",
+      "usesServices": []
+    },
+    {
       "name": "maintenance-center",
       "route": "/dashboard/maintenance-center",
       "title": "Brandzo | مركز الصيانة",
@@ -509,6 +573,22 @@
       ]
     },
     {
+      "name": "packing-shipping",
+      "route": "/dashboard/packing-shipping",
+      "title": "التعبئة والشحن",
+      "summary": "التعبئة والشحن ‹LPN-721› — طرودٌ بباركوداتٍ مستقلّة وملصقُ عميل.",
+      "file": "src/pages/dashboard/packing-shipping.astro",
+      "usesServices": []
+    },
+    {
+      "name": "pallet-control",
+      "route": "/dashboard/pallet-control",
+      "title": "الطبليات العائدة",
+      "summary": "الطبلياتُ العائدة — من له طبلياتٌ عندنا، ومن عنده طبلياتٌ لنا.",
+      "file": "src/pages/dashboard/pallet-control.astro",
+      "usesServices": []
+    },
+    {
       "name": "partner-ledger",
       "route": "/dashboard/partner-ledger",
       "title": "دفتر الذمم",
@@ -556,6 +636,14 @@
       "title": "لماذا البوابة تكامليّة لأودو",
       "summary": "لماذا البوابة تكامليّة لأودو — صفحة شرح الإنجاز وموقع البوابة من أودو.",
       "file": "src/pages/dashboard/portal-value.astro",
+      "usesServices": []
+    },
+    {
+      "name": "portal-visits",
+      "route": "/dashboard/portal-visits",
+      "title": "سجلّ زيارات البوّابة",
+      "summary": "سجلّ زيارات البوّابة — من دخل، ومن أيّ جهاز، وأيَّ شاشةٍ فتح.",
+      "file": "src/pages/dashboard/portal-visits.astro",
       "usesServices": []
     },
     {
@@ -923,6 +1011,44 @@
   ],
   "services": [
     {
+      "domain": "activity",
+      "dir": "src/services/activity",
+      "files": [
+        "deviceId.js",
+        "visitModel.js",
+        "visitModel.test.js",
+        "visitService.js",
+        "visitWiring.test.js",
+        "worktreeGuard.test.js"
+      ],
+      "fileCount": 6,
+      "testCount": 3,
+      "exports": [
+        "VISITS_CAP",
+        "VISIT_KINDS",
+        "browserDeviceId",
+        "browserSessionId",
+        "dayKey",
+        "daysIn",
+        "isDeviceId",
+        "isVisitKind",
+        "listenVisits",
+        "makeDeviceId",
+        "multiDeviceAccounts",
+        "readDeviceId",
+        "recordVisit",
+        "screenLabel",
+        "shapeVisit",
+        "visitDocId",
+        "visitProblems",
+        "visitText",
+        "visitsSnapshot"
+      ],
+      "collections": [
+        "portal_visits"
+      ]
+    },
+    {
       "domain": "archive",
       "dir": "src/services/archive",
       "files": [
@@ -1035,10 +1161,11 @@
         "returnTo.test.js",
         "roles.js",
         "roles.test.js",
+        "usageGuide.test.js",
         "usersService.js"
       ],
-      "fileCount": 14,
-      "testCount": 5,
+      "fileCount": 15,
+      "testCount": 6,
       "exports": [
         "ALWAYS_ALLOWED",
         "DEFAULT_ROLE",
@@ -1124,6 +1251,109 @@
       ],
       "collections": [
         "balances"
+      ]
+    },
+    {
+      "domain": "barcodes",
+      "dir": "src/services/barcodes",
+      "files": [
+        "barcodeCode.js",
+        "barcodeCode.test.js",
+        "barcodeKinds.js",
+        "barcodeKinds.test.js",
+        "barcodeRegistry.js",
+        "barcodeRegistry.test.js",
+        "barcodeService.guard.test.js",
+        "barcodeService.js",
+        "barcodesWiring.test.js",
+        "labelSheet.js",
+        "labelSheet.test.js",
+        "vehicleCode.js",
+        "vehicleCode.test.js"
+      ],
+      "fileCount": 13,
+      "testCount": 7,
+      "exports": [
+        "BARCODES",
+        "BARCODE_CLASSES",
+        "BARCODE_KINDS",
+        "BARCODE_OPS",
+        "BARCODE_STATUSES",
+        "COUNTERS",
+        "DEFAULT_SIZE_BY_KIND",
+        "GENERATABLE_KINDS",
+        "KIND_CLASS",
+        "LABEL_SIZES",
+        "LOCATION_KINDS",
+        "MAX_SHEET_LABELS",
+        "PALLET_ALIAS_PREFIX",
+        "PRINT_LOG_CAP",
+        "REGISTRY_CAP",
+        "SEGMENT_SEPARATOR",
+        "SELECTION_MODES",
+        "SERVICE_KINDS",
+        "SERVICE_MARKERS",
+        "SHIPMENT_PREFIX",
+        "STATUS_TRANSITIONS",
+        "VEHICLE_PREFIX",
+        "VEHICLE_SEQ_DIGITS",
+        "VEHICLE_TYPES",
+        "applyPrint",
+        "applyStatus",
+        "buildEntry",
+        "buildLabelSheet",
+        "buildSheetLabel",
+        "classOf",
+        "classifyScan",
+        "counterKey",
+        "ensureRegistered",
+        "entryCard",
+        "entryProblems",
+        "expectKind",
+        "filterEntries",
+        "formatVehicleCode",
+        "generateProblem",
+        "generateVerdict",
+        "getBarcode",
+        "getBarcodeCard",
+        "getPrintLog",
+        "isLocationKind",
+        "isServiceKind",
+        "isStructureKind",
+        "isTerminalStatus",
+        "kindLabel",
+        "listBarcodesByKind",
+        "listenBarcodes",
+        "normalizeScan",
+        "opProblem",
+        "originLabel",
+        "ownsStructure",
+        "parseVehicleCode",
+        "pickSelection",
+        "printProblem",
+        "recordPrint",
+        "registerBarcode",
+        "registerBatch",
+        "registryCounters",
+        "reprintSheetProblem",
+        "reprintSummary",
+        "reserveSequence",
+        "reuseProblem",
+        "serviceKindOf",
+        "setBarcodeStatus",
+        "shapeEntry",
+        "statusLabel",
+        "statusProblem",
+        "suggestVehicleType",
+        "valueSourceProblem",
+        "vehicleBarcodeCard",
+        "vehicleCodeProblem",
+        "vehicleCounterKey",
+        "vehicleMatchVerdict",
+        "vehicleTypeLabel"
+      ],
+      "collections": [
+        "barcodes"
       ]
     },
     {
@@ -1275,6 +1505,8 @@
         "states.js",
         "states.test.js",
         "surgical.test.js",
+        "tdr.js",
+        "tdr.test.js",
         "timeFields.js",
         "timeFields.test.js",
         "tr.js",
@@ -1289,8 +1521,8 @@
         "vsi.js",
         "vsr.js"
       ],
-      "fileCount": 102,
-      "testCount": 31,
+      "fileCount": 104,
+      "testCount": 32,
       "exports": [
         "ACCEPTED_ATTACHMENT_TYPES",
         "ATTACHMENT_ENTITY_KINDS",
@@ -1305,6 +1537,7 @@
         "CYCLE_CLOSED",
         "DEFAULT_TOLERANCE",
         "DELIVERY_CHAIN",
+        "DISCREPANCY_KINDS",
         "DOCREF_PARENT_TYPE",
         "DOCUMENT_LINK_TYPES",
         "DOCUMENT_RELATIONS_COLLECTION",
@@ -1315,6 +1548,7 @@
         "INITIAL_STATE",
         "INSPECTION_ROUTES",
         "INTERNAL_PROCUREMENT_CHAIN",
+        "LIABLE_PARTIES",
         "MATCH_STATUS",
         "MAX_ATTACHMENT_BYTES",
         "MAX_SOURCE_BYTES",
@@ -1397,6 +1631,7 @@
         "combinedLinePairs",
         "compatibleDocumentRelations",
         "compatibleRelationshipNeighborhood",
+        "completionProblems",
         "containerWarnings",
         "controlChecklist",
         "controlCompareRows",
@@ -1435,6 +1670,7 @@
         "derivePartialDocument",
         "descendantsOf",
         "disbursedTotal",
+        "discrepancyWarnings",
         "dlvWarnings",
         "dnWarnings",
         "docrefFields",
@@ -1536,6 +1772,7 @@
         "normalizeAr",
         "normalizeRelationEndpoint",
         "offersCount",
+        "openDiscrepancies",
         "orderStageChain",
         "orderValue",
         "packWarnings",
@@ -1864,6 +2101,7 @@
         "openVisit",
         "otifRate",
         "podRate",
+        "readVisit",
         "recordPod",
         "saveDoor",
         "saveHandover",
@@ -1886,6 +2124,106 @@
         "doors",
         "trips",
         "vehicles",
+        "yard_visits"
+      ]
+    },
+    {
+      "domain": "gate",
+      "dir": "src/services/gate",
+      "files": [
+        "gateModel.js",
+        "gateModel.test.js",
+        "gateReconcile.js",
+        "gateReconcile.test.js",
+        "gateRoles.js",
+        "gateRoles.test.js",
+        "gateService.js",
+        "gateWiring.test.js",
+        "palletLedger.js",
+        "palletLedger.test.js"
+      ],
+      "fileCount": 10,
+      "testCount": 5,
+      "exports": [
+        "COUNTABLE_STATES",
+        "EXIT_STATES",
+        "GATE_REASONS",
+        "GATE_WRITERS",
+        "LIABLE_PARTIES",
+        "LOAD_STATES",
+        "PALLET_CONDITIONS",
+        "PALLET_MOVES_CAP",
+        "PALLET_MOVE_KINDS",
+        "PALLET_OWNERSHIP",
+        "PALLET_TYPES",
+        "RECONCILE_STATUS",
+        "SESSIONS_CAP",
+        "UNKNOWN_PARTY",
+        "VISITOR_READERS",
+        "VISITS_CAP",
+        "assignDoor",
+        "balanceText",
+        "canReadVisitor",
+        "canWriteGate",
+        "cancelVisit",
+        "checkIn",
+        "checkOut",
+        "decideVariance",
+        "exitFieldsFor",
+        "exitState",
+        "fieldsFor",
+        "gateDeclared",
+        "gateReason",
+        "gateUiGate",
+        "holdVisit",
+        "isGateReason",
+        "isOnSite",
+        "liableLabel",
+        "listenDoors",
+        "listenPalletMoves",
+        "listenReceivingSessions",
+        "listenVisitEvents",
+        "listenYardVisits",
+        "loadGaps",
+        "loadSummary",
+        "moveKind",
+        "moveProblems",
+        "movesFromLoad",
+        "movesOfParty",
+        "needsDoor",
+        "nextStepFor",
+        "normalizePlate",
+        "openVarianceProblem",
+        "outLoadProblems",
+        "palletBalance",
+        "palletConditionLabel",
+        "palletOwnershipLabel",
+        "palletTotal",
+        "palletTypeLabel",
+        "purposeOf",
+        "readVisitor",
+        "reasonLabel",
+        "receivedDeclared",
+        "reconcileAll",
+        "reconcileVisit",
+        "recordPalletAdjustment",
+        "saveVarianceDecision",
+        "shapeGateLoad",
+        "shapeInLoad",
+        "shapeMove",
+        "shapeOutLoad",
+        "shapePalletLine",
+        "shapePalletLines",
+        "shapeVisitor",
+        "signedCount",
+        "verify",
+        "visitorGaps",
+        "writePalletMoves",
+        "writeVisitor"
+      ],
+      "collections": [
+        "pallet_moves",
+        "receiving_sessions",
         "yard_visits"
       ]
     },
@@ -2625,10 +2963,14 @@
         "pickPlan.test.js",
         "putawaySuggest.js",
         "putawaySuggest.test.js",
+        "qualifiedCode.js",
+        "qualifiedCode.test.js",
         "reconcile.js",
         "reconcile.test.js",
         "scanGate.js",
         "scanGate.test.js",
+        "serviceLocations.js",
+        "serviceLocations.test.js",
         "sourceImport.js",
         "sourceImport.test.js",
         "sourceImportService.js",
@@ -2636,8 +2978,8 @@
         "travelGrid.test.js",
         "warehouseService.js"
       ],
-      "fileCount": 27,
-      "testCount": 12,
+      "fileCount": 31,
+      "testCount": 14,
       "exports": [
         "CAPACITY_MEASURES",
         "CELL_ALERTS",
@@ -2645,6 +2987,7 @@
         "CELL_STATE_ORDER",
         "CODE_FIELDS",
         "CODE_SEGMENTS",
+        "DEFAULT_COMPANY_CODE",
         "DEFAULT_FACILITY_TYPE",
         "DEFAULT_STATUS",
         "DEFAULT_STORAGE_TYPE",
@@ -2661,10 +3004,13 @@
         "MAP_LEGEND",
         "MAX_GENERATED",
         "MAX_SEGMENT_LEN",
+        "MAX_SERVICE_INDEX",
         "MIN_SEGMENTS",
         "POINT_SOURCE",
         "SCHEME_LEVELS",
         "SEGMENT_SEPARATOR",
+        "SERVICE_TYPES",
+        "SERVICE_TYPE_ORDER",
         "STATUS_LABELS",
         "STORAGE_TYPES",
         "WEIGHTS",
@@ -2689,6 +3035,9 @@
         "buildLocationGrid",
         "buildLocationTree",
         "buildPreview",
+        "buildQualifiedCode",
+        "buildServiceCode",
+        "buildServiceRange",
         "canEditLocations",
         "canImportSource",
         "canReceive",
@@ -2701,6 +3050,8 @@
         "detectLevel",
         "deviationReport",
         "directablePct",
+        "displayCodeOf",
+        "doorFlowOf",
         "emptyDocument",
         "emptyLine",
         "expandScheme",
@@ -2718,6 +3069,7 @@
         "indexWorkByLocation",
         "isDescendantOf",
         "isEditable",
+        "isServiceLocation",
         "isValidLocationCode",
         "itemScanVerdict",
         "kitchenZoneGaps",
@@ -2752,10 +3104,14 @@
         "productionUnits",
         "qtyDeviation",
         "qtyVerdict",
+        "qualifierForCode",
+        "qualifierOf",
+        "qualifierPrefix",
         "recomputePreview",
         "reconcile",
         "referenceCoverage",
         "removeManualLine",
+        "resolveLocationScan",
         "routeDistance",
         "rowBin",
         "saveLocation",
@@ -2765,13 +3121,20 @@
         "scoreLocation",
         "sealManualFingerprints",
         "sellableStock",
+        "serviceCodeProblem",
+        "serviceLocationCard",
+        "serviceType",
+        "serviceTypeOf",
         "setLocationStatus",
         "shapeLevel",
         "shapeLocation",
         "shapeScheme",
         "shortLabelOf",
         "splitByLocation",
+        "splitServiceLocations",
         "statusLabel",
+        "stockPostingProblem",
+        "stripQualifier",
         "subscribeWarehouses",
         "suggestLocations",
         "summarize",
@@ -2788,6 +3151,421 @@
         "bin_locations",
         "source_imports",
         "warehouses"
+      ]
+    },
+    {
+      "domain": "lpn",
+      "dir": "src/services/lpn",
+      "files": [
+        "countPallet.js",
+        "countPallet.test.js",
+        "countService.js",
+        "custodyChain.js",
+        "custodyChain.test.js",
+        "dockLoading.js",
+        "dockLoading.test.js",
+        "dockService.js",
+        "exitGate.js",
+        "exitGate.test.js",
+        "fieldLexicon.js",
+        "fieldLexicon.test.js",
+        "governanceQueue.js",
+        "governanceQueue.test.js",
+        "governingRules.test.js",
+        "grnBridge.js",
+        "grnBridge.test.js",
+        "inboundDock.js",
+        "inboundDock.test.js",
+        "inboundService.js",
+        "labelModel.js",
+        "labelModel.test.js",
+        "loadingService.js",
+        "lpnCard.js",
+        "lpnCard.test.js",
+        "lpnCode.js",
+        "lpnCode.test.js",
+        "lpnContents.js",
+        "lpnContents.test.js",
+        "lpnEvents.js",
+        "lpnEvents.test.js",
+        "lpnIsolation.test.js",
+        "lpnKpis.js",
+        "lpnKpis.test.js",
+        "lpnLifecycle.js",
+        "lpnLifecycle.test.js",
+        "lpnLineage.js",
+        "lpnLineage.test.js",
+        "lpnRoles.js",
+        "lpnRoles.test.js",
+        "lpnSearch.js",
+        "lpnSearch.test.js",
+        "lpnService.guard.test.js",
+        "lpnService.js",
+        "lpnWiring.test.js",
+        "movementProof.js",
+        "movementProof.test.js",
+        "palletMap.js",
+        "palletMap.test.js",
+        "pickingScan.js",
+        "pickingScan.test.js",
+        "pickingService.js",
+        "pickingTask.js",
+        "pickingTask.test.js",
+        "putawayService.js",
+        "putawayTask.js",
+        "putawayTask.test.js",
+        "receivingScan.js",
+        "receivingScan.test.js",
+        "receivingService.js",
+        "receivingSession.js",
+        "receivingSession.test.js",
+        "stagingLoading.js",
+        "stagingLoading.test.js",
+        "stagingService.js",
+        "transferPallets.js",
+        "transferPallets.test.js"
+      ],
+      "fileCount": 67,
+      "testCount": 31,
+      "exports": [
+        "CHAIN_LINKS",
+        "COUNTABLE_STATES",
+        "DEFAULT_LABEL_SIZE",
+        "DEFAULT_LANG",
+        "DEFAULT_MIX_POLICY",
+        "DISCREPANCY_TYPES",
+        "DOCK_MODES",
+        "DOCK_STATES",
+        "DOCK_STEPS",
+        "EXIT_STATES",
+        "EXIT_STEPS",
+        "FIELD_LANGS",
+        "FIELD_OPS",
+        "FIELD_ROLES",
+        "GOVERNANCE_DECISIONS",
+        "INBOUND_PURPOSES",
+        "INBOUND_STATES",
+        "INBOUND_STEPS",
+        "ISSUE_BLOCKING_FLAGS",
+        "LOADING_STATES",
+        "LPN_EVENT_TYPES",
+        "LPN_FLAGS",
+        "LPN_INITIAL_STATES",
+        "LPN_MAX_WAREHOUSE_LEN",
+        "LPN_PREFIX",
+        "LPN_SEPARATOR",
+        "LPN_SEQ_DIGITS",
+        "LPN_STATES",
+        "LPN_TERMINAL_STATE",
+        "LPN_TERMINAL_STATES",
+        "LPN_TRANSITIONS",
+        "ON_FLOOR_STATES",
+        "PALLET_CELL_ORDER",
+        "PALLET_CELL_STATES",
+        "PALLET_LEGEND",
+        "PICKABLE_TYPES",
+        "PICK_TASK_STATES",
+        "PORTAL_TO_FIELD",
+        "PRINT_STATES",
+        "PROOF_METHODS",
+        "PROOF_ROLES",
+        "PUTAWAY_QUEUE_STATES",
+        "PUTAWAY_STATES",
+        "QUERY_KINDS",
+        "REJECT_REASONS",
+        "REQUIRED_EXIT_PROOFS",
+        "REQUIRED_GATE_PROOFS",
+        "REQUIRED_INBOUND_PROOFS",
+        "ROLE_OPS",
+        "SCAN_STAGES",
+        "SESSIONS",
+        "SESSIONS_CAP",
+        "SESSION_STATES",
+        "SIGHTING",
+        "STAGING_QUEUE_STATE",
+        "UNLOAD_CONDITIONS",
+        "abandonSession",
+        "activeFlags",
+        "addDraft",
+        "addReading",
+        "appendUnitEvent",
+        "applyAccepted",
+        "applyContentChange",
+        "applyExitScan",
+        "applyExtra",
+        "applyFlag",
+        "applyGateScan",
+        "applyInboundScan",
+        "applyItemExtra",
+        "applyItemScan",
+        "applyLoad",
+        "applyPick",
+        "applyReceive",
+        "applySighting",
+        "applyTransition",
+        "applyUnload",
+        "applyUnloadExtra",
+        "assign",
+        "assignTask",
+        "assignToStaging",
+        "attachPallet",
+        "beginLoading",
+        "beginUnloading",
+        "beginWork",
+        "binScanVerdict",
+        "binSummary",
+        "binVerdict",
+        "binsOfItem",
+        "blockAtGate",
+        "blockSession",
+        "buildCard",
+        "buildCustodyChain",
+        "buildDiscrepancies",
+        "buildEvent",
+        "buildInboundSession",
+        "buildIssuePallet",
+        "buildLabel",
+        "buildPrintJob",
+        "buildProof",
+        "buildRejection",
+        "buildSession",
+        "canDo",
+        "chainDurations",
+        "chainFor",
+        "chainLine",
+        "chainSummary",
+        "classifyQuery",
+        "clearFlag",
+        "clearUnitFlag",
+        "closeDock",
+        "closeDraftToGovernance",
+        "closeInbound",
+        "closeLoad",
+        "closeLoading",
+        "closePickTask",
+        "closeSession",
+        "closeTaskWithPallet",
+        "completePutaway",
+        "containmentProblems",
+        "contentChangeProblem",
+        "countableDrafts",
+        "counterView",
+        "createGrnFromSession",
+        "createHandlingUnit",
+        "createPickTask",
+        "currentStep",
+        "custodyChainFor",
+        "decideDiscrepancy",
+        "decisionOf",
+        "decisionProblem",
+        "dirOf",
+        "distinctItems",
+        "docEventId",
+        "dockCard",
+        "dockCloseProblem",
+        "dockCounters",
+        "dockStep",
+        "eventProblem",
+        "exceptionHotspots",
+        "executeDecision",
+        "executePick",
+        "executePutaway",
+        "exitCard",
+        "exitCloseProblem",
+        "exitGaps",
+        "exitReadiness",
+        "exitScanVerdict",
+        "exitStep",
+        "fieldRolesOf",
+        "findProof",
+        "findSessionLine",
+        "finishSession",
+        "flagProblem",
+        "flagUnit",
+        "formatLpnCode",
+        "fulfillmentGap",
+        "gateGaps",
+        "gateScanVerdict",
+        "getSession",
+        "getUnit",
+        "getUnitEvents",
+        "governanceCounters",
+        "grnHeaderFrom",
+        "grnPreview",
+        "grnProblem",
+        "inboundCard",
+        "inboundCloseProblem",
+        "inboundGaps",
+        "inboundPurpose",
+        "inboundScanVerdict",
+        "inboundStep",
+        "inboundVariance",
+        "initialStateProblem",
+        "integrityOf",
+        "isAvailable",
+        "isBlockedForIssue",
+        "isClosedOf",
+        "isEmpty",
+        "isFieldLang",
+        "isMixed",
+        "isOnFloor",
+        "isScanned",
+        "isValidLpnCode",
+        "itemScanVerdict",
+        "itemStockPicture",
+        "itemVerdict",
+        "leaveSession",
+        "lexiconKeys",
+        "lineBalanceRef",
+        "lineKey",
+        "lineageTrace",
+        "listCountableUnits",
+        "listInbound",
+        "listOpenSessions",
+        "listOpenTasks",
+        "listPendingGovernance",
+        "listPutawayQueue",
+        "listRoutes",
+        "listSessions",
+        "listStagingQueue",
+        "listUnitsAt",
+        "listUnitsByState",
+        "listenSession",
+        "listenSessions",
+        "listenTask",
+        "listenUnit",
+        "loadScanVerdict",
+        "loadableCode",
+        "loadingCloseProblem",
+        "loadingCounters",
+        "lotsOf",
+        "lpnCodeProblem",
+        "lpnCounterKey",
+        "lpnDateStamp",
+        "mergeUnits",
+        "missingIn",
+        "moveUnit",
+        "movementProblem",
+        "needsNewIdentity",
+        "nextCopyNumber",
+        "nextStage",
+        "normalizeLpnCode",
+        "offSuggestionRate",
+        "opProblem",
+        "openDockSession",
+        "openExit",
+        "openInbound",
+        "openLink",
+        "openLoading",
+        "openOrderCard",
+        "openPickTask",
+        "openPutawayTask",
+        "openSession",
+        "openTask",
+        "opsOf",
+        "orderEvents",
+        "palletCellOf",
+        "palletChip",
+        "palletCountByNode",
+        "palletDiff",
+        "palletSightingVerdict",
+        "palletVerdict",
+        "palletsByBin",
+        "palletsByState",
+        "parseLpnCode",
+        "pickAccuracy",
+        "pickVerdict",
+        "picksOfTask",
+        "planDecision",
+        "previewBin",
+        "previewStaging",
+        "printJobProblem",
+        "proofCode",
+        "proofLine",
+        "proofProblem",
+        "proofSummary",
+        "qtyVerdict",
+        "readingProblem",
+        "receiptToStorageMs",
+        "receiveCloseProblem",
+        "receiveCounters",
+        "receiveScanVerdict",
+        "receivedByLine",
+        "receivingCycleMs",
+        "reconcileInput",
+        "recordSighting",
+        "rejectIntoDraft",
+        "rejectionProblem",
+        "rejectionSummary",
+        "remainingOf",
+        "removeQty",
+        "reprintRate",
+        "reprintSummary",
+        "reserveLpnCode",
+        "resolveScan",
+        "resultCard",
+        "reverseEvent",
+        "reviewCard",
+        "roleSummary",
+        "routeOf",
+        "scanExtra",
+        "scanInbound",
+        "scanIntoDraft",
+        "scanItem",
+        "scanItemExtra",
+        "scanLoad",
+        "scanRejectRate",
+        "scanStep",
+        "scanVerdict",
+        "scansByActor",
+        "searchPallets",
+        "seesBookQtyWhileCounting",
+        "sessionCloseProblem",
+        "sessionEventId",
+        "sessionLines",
+        "sessionOpenProblem",
+        "sessionTotals",
+        "sessionTouches",
+        "shipPalletProblem",
+        "shipmentManifest",
+        "shortLpnLabel",
+        "sightingTotals",
+        "skip",
+        "skipStep",
+        "splitUnit",
+        "stagedBalanceOf",
+        "stagingAssignVerdict",
+        "stagingDwellMs",
+        "stampExit",
+        "stampExitSession",
+        "startSession",
+        "stateLabel",
+        "stepRemaining",
+        "stickConfirmVerdict",
+        "t",
+        "takeFromPallet",
+        "taskCloseProblem",
+        "taskOpenProblem",
+        "taskTotals",
+        "totalBaseQty",
+        "traceLine",
+        "traceOf",
+        "transferIdentityDecision",
+        "transitionProblem",
+        "transitionUnit",
+        "transitionVerdict",
+        "uiGate",
+        "unexpectedPlacements",
+        "unitTransitionProblem",
+        "unloadScanVerdict",
+        "warehouseProblem",
+        "withProof"
+      ],
+      "collections": [
+        "dock_sessions",
+        "handling_units",
+        "picking_tasks",
+        "receiving_sessions"
       ]
     },
     {
@@ -3545,6 +4323,34 @@
       ]
     },
     {
+      "domain": "scan",
+      "dir": "src/services/scan",
+      "files": [
+        "cameraScanner.js",
+        "cameraScanner.test.js",
+        "scanEngine.js",
+        "scanEngine.test.js",
+        "wedgeScanner.js",
+        "wedgeScanner.test.js"
+      ],
+      "fileCount": 6,
+      "testCount": 3,
+      "exports": [
+        "NATIVE_FORMATS",
+        "SCAN_FORMATS",
+        "cameraErrorText",
+        "createScanGate",
+        "createWedgeReader",
+        "ensureScannerLibrary",
+        "formatCodes",
+        "isTypingTarget",
+        "normalizeScanned",
+        "scanBox",
+        "startCameraScan"
+      ],
+      "collections": []
+    },
+    {
       "domain": "settings",
       "dir": "src/services/settings",
       "files": [
@@ -3572,6 +4378,91 @@
         "settingsIssues"
       ],
       "collections": []
+    },
+    {
+      "domain": "shipping",
+      "dir": "src/services/shipping",
+      "files": [
+        "customerLabel.js",
+        "customerLabel.test.js",
+        "packingFlow.js",
+        "packingFlow.test.js",
+        "shipmentCode.js",
+        "shipmentCode.test.js",
+        "shippingService.guard.test.js",
+        "shippingService.js"
+      ],
+      "fileCount": 8,
+      "testCount": 4,
+      "exports": [
+        "CUSTOMER_LABEL_FIELDS",
+        "CUSTOMER_LABEL_SIZE",
+        "MAX_PARCELS",
+        "ORDER_STATES",
+        "ORDER_TRANSITIONS",
+        "PARCEL_DIGITS",
+        "PARCEL_STATES",
+        "SEALED_FIELDS",
+        "SHIPMENTS",
+        "SHIPMENTS_CAP",
+        "SHIPMENT_EVENTS",
+        "SHIPMENT_SEQ_DIGITS",
+        "buildAllCustomerLabels",
+        "buildCustomerLabel",
+        "cancelParcel",
+        "cancelParcelOn",
+        "closePacking",
+        "closeParcel",
+        "closeParcelOn",
+        "closeParcelProblem",
+        "customerLabelProblem",
+        "finishPacking",
+        "formatParcelCode",
+        "formatShipmentCode",
+        "getShipment",
+        "getShipmentEvents",
+        "labelGaps",
+        "listPackablePicks",
+        "listenShipments",
+        "manualOverrideProblem",
+        "markParcelPrinted",
+        "markShipmentLoaded",
+        "openPacking",
+        "openShipment",
+        "orderStateLabel",
+        "orderTransitionProblem",
+        "packIntoParcel",
+        "packLine",
+        "packLineVerdict",
+        "packingCloseProblem",
+        "packingCounters",
+        "parcelByCode",
+        "parcelCard",
+        "parcelCodeProblem",
+        "parcelCodes",
+        "parcelOf",
+        "parcelOfTotal",
+        "parcelScanVerdict",
+        "parseShipmentCode",
+        "printParcelLabel",
+        "remainingLines",
+        "reopenParcel",
+        "reopenParcelOn",
+        "reserveShipmentCode",
+        "setParcelCount",
+        "setParcels",
+        "shipmentCodeProblem",
+        "shipmentCounterKey",
+        "shipmentDateStamp",
+        "shipmentOf",
+        "shipmentsOfOrder",
+        "shortShipmentLabel",
+        "stagingBoard"
+      ],
+      "collections": [
+        "picking_tasks",
+        "shipments"
+      ]
     },
     {
       "domain": "stock",
@@ -3941,11 +4832,13 @@
       "domain": "workspace",
       "dir": "src/services/workspace",
       "files": [
+        "dependabotConfig.test.js",
         "identity.js",
-        "identity.test.js"
+        "identity.test.js",
+        "vendoredLibs.test.js"
       ],
-      "fileCount": 2,
-      "testCount": 1,
+      "fileCount": 4,
+      "testCount": 3,
       "exports": [
         "BLOCK_END",
         "BLOCK_START",
@@ -3953,6 +4846,7 @@
         "KINDS",
         "SPOTS",
         "SWEEP_EXEMPT",
+        "SWEEP_REGENERATED",
         "agentsBlock",
         "atRiskOfErasure",
         "identityOnly",
@@ -4275,6 +5169,128 @@
         ]
       },
       {
+        "name": "barcode_counters",
+        "path": "barcode_counters",
+        "rules": [
+          {
+            "actions": [
+              "read"
+            ],
+            "condition": "signedIn()",
+            "roles": [
+              "signedIn"
+            ]
+          },
+          {
+            "actions": [
+              "create"
+            ],
+            "condition": "isStockActor() && request.resource.data.seq == 1",
+            "roles": [
+              "isStockActor"
+            ]
+          },
+          {
+            "actions": [
+              "update"
+            ],
+            "condition": "isStockActor() && request.resource.data.seq == resource.data.seq + 1",
+            "roles": [
+              "isStockActor"
+            ]
+          },
+          {
+            "actions": [
+              "delete"
+            ],
+            "condition": "false",
+            "roles": []
+          }
+        ]
+      },
+      {
+        "name": "barcodes",
+        "path": "barcodes",
+        "rules": [
+          {
+            "actions": [
+              "read"
+            ],
+            "condition": "signedIn()",
+            "roles": [
+              "signedIn"
+            ]
+          },
+          {
+            "actions": [
+              "create"
+            ],
+            "condition": "signedIn() && request.resource.data.createdByUid == request.auth.uid && request.resource.data.value == value && request.resource.data.status == 'ACTIVE' && requ",
+            "roles": [
+              "signedIn",
+              "isManager",
+              "isStockActor"
+            ]
+          },
+          {
+            "actions": [
+              "update"
+            ],
+            "condition": "isStockActor() && request.resource.data.value == resource.data.value && request.resource.data.kind == resource.data.kind && request.resource.data.class == resou",
+            "roles": [
+              "isStockActor"
+            ]
+          },
+          {
+            "actions": [
+              "delete"
+            ],
+            "condition": "false",
+            "roles": []
+          }
+        ]
+      },
+      {
+        "name": "prints",
+        "path": "barcodes/prints",
+        "rules": [
+          {
+            "actions": [
+              "read"
+            ],
+            "condition": "signedIn()",
+            "roles": [
+              "signedIn"
+            ]
+          },
+          {
+            "actions": [
+              "create"
+            ],
+            "condition": "isStockActor() && request.resource.data.byUid == request.auth.uid && request.resource.data.value == value",
+            "roles": [
+              "isStockActor"
+            ]
+          },
+          {
+            "actions": [
+              "update"
+            ],
+            "condition": "isStockActor() && request.resource.data.byUid == resource.data.byUid && request.resource.data.copy == resource.data.copy && request.resource.data.actor == resou",
+            "roles": [
+              "isStockActor"
+            ]
+          },
+          {
+            "actions": [
+              "delete"
+            ],
+            "condition": "false",
+            "roles": []
+          }
+        ]
+      },
+      {
         "name": "bin_locations",
         "path": "bin_locations",
         "rules": [
@@ -4528,6 +5544,46 @@
             "roles": [
               "isManager",
               "isVanSalesWriter"
+            ]
+          },
+          {
+            "actions": [
+              "delete"
+            ],
+            "condition": "false",
+            "roles": []
+          }
+        ]
+      },
+      {
+        "name": "dock_sessions",
+        "path": "dock_sessions",
+        "rules": [
+          {
+            "actions": [
+              "read"
+            ],
+            "condition": "signedIn()",
+            "roles": [
+              "signedIn"
+            ]
+          },
+          {
+            "actions": [
+              "create"
+            ],
+            "condition": "isStockActor() && request.resource.data.openedByUid == request.auth.uid && request.resource.data.mode in ['LOAD', 'EXIT', 'INBOUND']",
+            "roles": [
+              "isStockActor"
+            ]
+          },
+          {
+            "actions": [
+              "update"
+            ],
+            "condition": "isStockActor() && request.resource.data.mode == resource.data.mode && request.resource.data.openedBy == resource.data.openedBy && request.resource.data.openedBy",
+            "roles": [
+              "isStockActor"
             ]
           },
           {
@@ -4943,6 +5999,86 @@
         ]
       },
       {
+        "name": "handling_units",
+        "path": "handling_units",
+        "rules": [
+          {
+            "actions": [
+              "read"
+            ],
+            "condition": "signedIn()",
+            "roles": [
+              "signedIn"
+            ]
+          },
+          {
+            "actions": [
+              "create"
+            ],
+            "condition": "isStockActor() && request.resource.data.createdByUid == request.auth.uid && request.resource.data.code == lpnCode && lpnCode.matches('LPN-[A-Z0-9]{1,12}-[0-9]{8",
+            "roles": [
+              "isStockActor"
+            ]
+          },
+          {
+            "actions": [
+              "update"
+            ],
+            "condition": "isStockActor() && request.resource.data.code == resource.data.code && request.resource.data.createdBy == resource.data.createdBy && request.resource.data.create",
+            "roles": [
+              "isStockActor"
+            ]
+          },
+          {
+            "actions": [
+              "delete"
+            ],
+            "condition": "false",
+            "roles": []
+          }
+        ]
+      },
+      {
+        "name": "events",
+        "path": "handling_units/events",
+        "rules": [
+          {
+            "actions": [
+              "read"
+            ],
+            "condition": "signedIn()",
+            "roles": [
+              "signedIn"
+            ]
+          },
+          {
+            "actions": [
+              "create"
+            ],
+            "condition": "isStockActor() && request.resource.data.byUid == request.auth.uid && request.resource.data.lpn == lpnCode",
+            "roles": [
+              "isStockActor"
+            ]
+          },
+          {
+            "actions": [
+              "update"
+            ],
+            "condition": "isStockActor() && request.resource.data.byUid == resource.data.byUid && request.resource.data.type == resource.data.type && request.resource.data.lpn == resourc",
+            "roles": [
+              "isStockActor"
+            ]
+          },
+          {
+            "actions": [
+              "delete"
+            ],
+            "condition": "false",
+            "roles": []
+          }
+        ]
+      },
+      {
         "name": "hiring_requests",
         "path": "hiring_requests",
         "rules": [
@@ -5267,6 +6403,46 @@
           {
             "actions": [
               "update",
+              "delete"
+            ],
+            "condition": "false",
+            "roles": []
+          }
+        ]
+      },
+      {
+        "name": "lpn_counters",
+        "path": "lpn_counters",
+        "rules": [
+          {
+            "actions": [
+              "read"
+            ],
+            "condition": "signedIn()",
+            "roles": [
+              "signedIn"
+            ]
+          },
+          {
+            "actions": [
+              "create"
+            ],
+            "condition": "isStockActor() && request.resource.data.seq == 1",
+            "roles": [
+              "isStockActor"
+            ]
+          },
+          {
+            "actions": [
+              "update"
+            ],
+            "condition": "isStockActor() && request.resource.data.seq == resource.data.seq + 1",
+            "roles": [
+              "isStockActor"
+            ]
+          },
+          {
+            "actions": [
               "delete"
             ],
             "condition": "false",
@@ -5700,6 +6876,38 @@
         ]
       },
       {
+        "name": "pallet_moves",
+        "path": "pallet_moves",
+        "rules": [
+          {
+            "actions": [
+              "read"
+            ],
+            "condition": "signedIn()",
+            "roles": [
+              "signedIn"
+            ]
+          },
+          {
+            "actions": [
+              "create"
+            ],
+            "condition": "isYardWriter() && request.resource.data.byUid == request.auth.uid",
+            "roles": [
+              "isYardWriter"
+            ]
+          },
+          {
+            "actions": [
+              "update",
+              "delete"
+            ],
+            "condition": "false",
+            "roles": []
+          }
+        ]
+      },
+      {
         "name": "partner_ledger",
         "path": "partner_ledger",
         "rules": [
@@ -5721,6 +6929,78 @@
               "isStockActor",
               "isVanSalesWriter",
               "myRole"
+            ]
+          },
+          {
+            "actions": [
+              "update",
+              "delete"
+            ],
+            "condition": "false",
+            "roles": []
+          }
+        ]
+      },
+      {
+        "name": "picking_tasks",
+        "path": "picking_tasks",
+        "rules": [
+          {
+            "actions": [
+              "read"
+            ],
+            "condition": "signedIn()",
+            "roles": [
+              "signedIn"
+            ]
+          },
+          {
+            "actions": [
+              "create"
+            ],
+            "condition": "isStockActor() && request.resource.data.openedByUid == request.auth.uid && request.resource.data.state == 'OPEN'",
+            "roles": [
+              "isStockActor"
+            ]
+          },
+          {
+            "actions": [
+              "update"
+            ],
+            "condition": "isStockActor() && request.resource.data.source == resource.data.source && request.resource.data.warehouse == resource.data.warehouse && request.resource.data.op",
+            "roles": [
+              "isStockActor"
+            ]
+          },
+          {
+            "actions": [
+              "delete"
+            ],
+            "condition": "false",
+            "roles": []
+          }
+        ]
+      },
+      {
+        "name": "portal_visits",
+        "path": "portal_visits",
+        "rules": [
+          {
+            "actions": [
+              "read"
+            ],
+            "condition": "isAdmin()",
+            "roles": [
+              "isAdmin"
+            ]
+          },
+          {
+            "actions": [
+              "create"
+            ],
+            "condition": "signedIn() && request.resource.data.uid == request.auth.uid && request.resource.data.kind in ['LOGIN', 'VIEW', 'LOGOUT']",
+            "roles": [
+              "signedIn"
             ]
           },
           {
@@ -5871,6 +7151,86 @@
               "isManager",
               "myRole"
             ]
+          }
+        ]
+      },
+      {
+        "name": "putaway_tasks",
+        "path": "putaway_tasks",
+        "rules": [
+          {
+            "actions": [
+              "read"
+            ],
+            "condition": "signedIn()",
+            "roles": [
+              "signedIn"
+            ]
+          },
+          {
+            "actions": [
+              "create"
+            ],
+            "condition": "isStockActor() && request.resource.data.openedByUid == request.auth.uid && request.resource.data.state == 'OPEN'",
+            "roles": [
+              "isStockActor"
+            ]
+          },
+          {
+            "actions": [
+              "update"
+            ],
+            "condition": "isStockActor() && request.resource.data.lpn == resource.data.lpn && request.resource.data.openedBy == resource.data.openedBy && resource.data.state == 'OPEN' &&",
+            "roles": [
+              "isStockActor"
+            ]
+          },
+          {
+            "actions": [
+              "delete"
+            ],
+            "condition": "false",
+            "roles": []
+          }
+        ]
+      },
+      {
+        "name": "receiving_sessions",
+        "path": "receiving_sessions",
+        "rules": [
+          {
+            "actions": [
+              "read"
+            ],
+            "condition": "signedIn()",
+            "roles": [
+              "signedIn"
+            ]
+          },
+          {
+            "actions": [
+              "create"
+            ],
+            "condition": "isStockActor() && request.resource.data.openedByUid == request.auth.uid && request.resource.data.state == 'OPEN'",
+            "roles": [
+              "isStockActor"
+            ]
+          },
+          {
+            "actions": [
+              "update"
+            ],
+            "condition": "isStockActor() && request.resource.data.order == resource.data.order && request.resource.data.warehouse == resource.data.warehouse && request.resource.data.open",
+            "roles": [
+              "isStockActor"
+            ]
+          },
+          {
+            "actions": [
+              "delete"
+            ],
+            "condition": "false",
+            "roles": []
           }
         ]
       },
@@ -6031,6 +7391,86 @@
             "condition": "isAdmin()",
             "roles": [
               "isAdmin"
+            ]
+          },
+          {
+            "actions": [
+              "delete"
+            ],
+            "condition": "false",
+            "roles": []
+          }
+        ]
+      },
+      {
+        "name": "shipments",
+        "path": "shipments",
+        "rules": [
+          {
+            "actions": [
+              "read"
+            ],
+            "condition": "signedIn()",
+            "roles": [
+              "signedIn"
+            ]
+          },
+          {
+            "actions": [
+              "create"
+            ],
+            "condition": "isStockActor() && request.resource.data.openedByUid == request.auth.uid && request.resource.data.shipment == shipmentCode && shipmentCode.matches('SHP-[A-Z0-9]{",
+            "roles": [
+              "isStockActor"
+            ]
+          },
+          {
+            "actions": [
+              "update"
+            ],
+            "condition": "isStockActor() && request.resource.data.shipment == resource.data.shipment && request.resource.data.orderRef == resource.data.orderRef && request.resource.data.",
+            "roles": [
+              "isStockActor"
+            ]
+          },
+          {
+            "actions": [
+              "delete"
+            ],
+            "condition": "false",
+            "roles": []
+          }
+        ]
+      },
+      {
+        "name": "events",
+        "path": "shipments/events",
+        "rules": [
+          {
+            "actions": [
+              "read"
+            ],
+            "condition": "signedIn()",
+            "roles": [
+              "signedIn"
+            ]
+          },
+          {
+            "actions": [
+              "create"
+            ],
+            "condition": "isStockActor() && request.resource.data.byUid == request.auth.uid && request.resource.data.shipment == shipmentCode",
+            "roles": [
+              "isStockActor"
+            ]
+          },
+          {
+            "actions": [
+              "update"
+            ],
+            "condition": "isStockActor() && request.resource.data.byUid == resource.data.byUid && request.resource.data.type == resource.data.type && request.resource.data.actor == resou",
+            "roles": [
+              "isStockActor"
             ]
           },
           {
@@ -6818,6 +8258,42 @@
           {
             "actions": [
               "update",
+              "delete"
+            ],
+            "condition": "false",
+            "roles": []
+          }
+        ]
+      },
+      {
+        "name": "visitor",
+        "path": "yard_visits/visitor",
+        "rules": [
+          {
+            "actions": [
+              "read"
+            ],
+            "condition": "isBootstrapAdmin() || (signedIn() && hasProfile() && isActive() && myRole() in ['admin', 'warehouse_manager', 'gate_officer'])",
+            "roles": [
+              "isBootstrapAdmin",
+              "signedIn",
+              "hasProfile",
+              "isActive",
+              "myRole"
+            ]
+          },
+          {
+            "actions": [
+              "create",
+              "update"
+            ],
+            "condition": "isYardWriter()",
+            "roles": [
+              "isYardWriter"
+            ]
+          },
+          {
+            "actions": [
               "delete"
             ],
             "condition": "false",
@@ -7726,16 +9202,19 @@
       "preview": "astro preview",
       "astro": "astro",
       "where": "node scripts/where.mjs",
+      "guard": "node scripts/guard-worktrees.mjs --all",
+      "rescue": "node scripts/rescue-worktrees.mjs",
       "identity": "node scripts/identity.mjs",
       "identity:apply": "node scripts/identity.mjs --apply",
       "sync": "node scripts/sync-sibling.mjs",
       "arch": "node scripts/build-arch.mjs",
       "org": "node scripts/build-org.mjs",
-      "prebuild": "node scripts/build-arch.mjs && node scripts/build-org.mjs",
+      "prebuild": "node scripts/build-arch.mjs && node scripts/build-org.mjs && node scripts/build-usage-guide.mjs",
+      "guide": "node scripts/build-usage-guide.mjs",
       "test": "node --test \"src/**/*.test.js\"",
       "test:rules": "firebase emulators:exec --only firestore \"node --test test/firestore-rules.test.mjs\"",
       "audit": "node scripts/audit-portal.mjs",
-      "plan": "npm run where && npm run plan:phase-one && npm run plan:client && npm run plan:sap && npm run plan:locations && npm run plan:exec && npm run plan:fnb && npm run plan:capture",
+      "plan": "npm run where && npm run plan:phase-one && npm run plan:client && npm run plan:sap && npm run plan:locations && npm run plan:exec && npm run plan:fnb && npm run plan:capture && npm run plan:lpn && npm run plan:gate && npm run plan:visits && npm run plan:deps",
       "plan:phase-one": "node scripts/plan-check.mjs",
       "plan:client": "node scripts/plan-check.mjs --plan docs/plan/client-completion.json --resume docs/plan/استئناف-نسخة-العميل.md",
       "plan:sap": "node scripts/plan-check.mjs --plan docs/plan/sap-alignment.json --resume docs/plan/استئناف-المواءمة.md",
@@ -7743,6 +9222,10 @@
       "plan:exec": "node scripts/plan-check.mjs --plan docs/plan/warehouse-execution.json --resume docs/plan/استئناف-التنفيذ-الميداني.md",
       "plan:fnb": "node scripts/plan-check.mjs --plan docs/plan/fnb-sector.json --resume docs/plan/استئناف-قطاع-الأغذية.md",
       "plan:capture": "node scripts/plan-check.mjs --plan docs/plan/capture-layer.json --resume docs/plan/استئناف-طبقة-الالتقاط.md",
+      "plan:lpn": "node scripts/plan-check.mjs --plan docs/plan/lpn-layer.json --resume docs/plan/استئناف-طبقة-الطبالي.md",
+      "plan:gate": "node scripts/plan-check.mjs --plan docs/plan/gate-control.json --resume docs/plan/استئناف-بوابة-الأمن.md",
+      "plan:visits": "node scripts/plan-check.mjs --plan docs/plan/portal-visits.json --resume docs/plan/استئناف-سجل-الزيارات.md",
+      "plan:deps": "node scripts/plan-check.mjs --plan docs/plan/deps-hardening.json --resume docs/plan/استئناف-تحصين-التبعيات.md",
       "timefields": "node scripts/build-time-fields-doc.mjs",
       "lint": "eslint .",
       "format": "prettier --write .",
