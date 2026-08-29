@@ -23,18 +23,25 @@ import {
 } from '../../../services/documents/documentsService.js';
 import { listenAttachments } from '../../../services/documents/attachmentsService.js';
 import { listenReconciliations } from '../../../services/documents/controlService.js';
-import { emptyDocument, emptyChecklist, missingRequired, isEmptyLine, applyItemToLine } from '../../../services/documents/schemaUtils.js';
+import { emptyDocument, emptyChecklist, missingRequired, contentLines } from '../../../services/documents/schemaUtils.js';
+import {
+  documentPartner,
+  resolveItemCode,
+  resolveItemCodes,
+  applyResolvedItem,
+  outcomeFor,
+  duplicateGroups,
+  codeStatuses,
+  skuCellVerdict,
+  mergeDuplicateLines,
+} from '../../../services/documents/itemResolver.js';
 import { mergeParentLink } from '../../../services/documents/chain.js';
 import { lookupByBarcode, getItem, subscribeItems } from '../../../services/items/itemService.js';
-import { canonicalLineSku } from '../../../services/items/itemIdentity.js';
 import { lookupItemByPartnerCode } from '../../../services/partners/itemPartnerCatalogService.js';
 import {
   buildItemIndexes,
   itemForLine,
   refreshLineBase,
-  stampPartnerUom,
-  unitForBarcode,
-  defaultUomFor,
   uomOptionsForLine,
 } from '../../../services/items/uomWiring.js';
 import { uomLabel } from '../../../services/items/uomModel.js';
@@ -70,6 +77,26 @@ import AttachmentsPanel from './AttachmentsPanel.jsx';
 import ControlPanel from './ControlPanel.jsx';
 import PromotionsPanel from './PromotionsPanel.jsx';
 import DocumentNavigator from './DocumentNavigator.jsx';
+
+/**
+ * وصلةُ المحلّل بالسحابة: هو يعرف **الترتيب**، وهذه تعرف **من يُسأل**.
+ * ثابتةٌ خارج المكوّن فلا تُبنى مع كلّ رسم.
+ */
+const ITEM_LOOKUPS = { getItem, lookupByBarcode, lookupItemByPartnerCode };
+
+/**
+ * صفوفُ الإدخال الجاهزة في مستندٍ جديد (BULK-105 · يسدّ ث‑٣ وث‑٥).
+ *
+ * ═══ والتوفيقُ يُكتب لا يُفترض ═══
+ * رأسُ `LineItemsTable` يقول إنّ عيبَ الورق كان **ثمانيةَ صفوفٍ ثابتةً
+ * مكتوبةً في الكود**، وإنّ هذا الجدول وُجد ليُنهيها. فكيف تُضاف عشرة؟
+ *
+ * لأنّهما ليسا شيئًا واحدًا: صفوفُ الورق **تُطبع** فارغةً ولا سبيلَ إلى
+ * إنقاصها، وهذه صفوفُ **إدخالٍ** تُقصّ عند الحفظ وعند الطباعة معًا
+ * (`contentLines`) — فلا يعود الورقُ من الباب الخلفيّ. ولذلك رُتّبت
+ * المهامّ عمدًا: **القصُّ نُفّذ واختُبر قبل أن يُضاف صفٌّ واحد.**
+ */
+const NEW_DOCUMENT_ROWS = 10;
 
 /** يقرأ معاملات الرابط (الموقع ثابت — لا توجيه من الخادم). */
 function readParams() {
@@ -123,7 +150,7 @@ export default function DocumentEngine() {
   useEffect(() => {
     if (!schema) return;
     if (!docId) {
-      setDoc({ type: schema.type, state: 'draft', ...emptyDocument(schema) });
+      setDoc({ type: schema.type, state: 'draft', ...emptyDocument(schema, { rows: NEW_DOCUMENT_ROWS }) });
       setAttachments([]);
       setReconciliations([]);
       return;
@@ -164,6 +191,16 @@ export default function DocumentEngine() {
   // تُختار من قوائم النظام لا كتابةً حرّة. الفشل ⇒ قائمةٌ فارغة ⇒ الحقل
   // نصٌّ حرّ كسلوك اليوم — لا تعطيل. والمندوبون من ماسترهم (SAP-21)
   // المقروء لكلّ مصادَق — لا من دليل المستخدمين المحصور بالمديرَين.
+  /**
+   * حكمُ آخر لصقة (BULK-104): أكوادٌ لم تُستبن، وأكوادٌ تكرّرت.
+   *
+   * ★★ **حالةُ شاشةٍ لا حقلُ بيانات** — عمدًا خارج `doc`: لو سكنت البندَ
+   * لَحُفظت في المستند ولَظهرت في الطباعة والتقارير ولَبقيت بعد أن يُسجَّل
+   * الصنفُ ويصير معروفًا. وهي بالكود لا بالفهرس، فحذفُ بندٍ أو إضافتُه لا
+   * يزحزح العلامات، وإصلاحُ الكود يُذهبها بلا تنظيف.
+   */
+  const [pasteMarks, setPasteMarks] = useState(null);
+
   const [suppliers, setSuppliers] = useState([]);
   const [warehousesList, setWarehousesList] = useState([]);
   const [vehiclesList, setVehiclesList] = useState([]);
@@ -180,6 +217,17 @@ export default function DocumentEngine() {
   // المستفيد لا على القطاع. الفشل ⇒ قائمةٌ فارغة ⇒ الحقل نصٌّ حرّ كما كان.
   const [orgLocationsList, setOrgLocationsList] = useState([]);
   useEffect(() => listenOrgLocations(setOrgLocationsList, () => setOrgLocationsList([])), []);
+  /**
+   * المكرّرُ يُحسب من البنود **الآن** لا من لحظة اللصق — فيذهب التنبيه
+   * بالدمج أو بتصحيح الكود بلا أثرٍ عالق. ومحصورٌ بأكواد اللصقة وحدَها:
+   * بندان متعمّدان لصنفٍ واحدٍ في مستندٍ قديم ليسا خطأً يُنبَّه عليه.
+   */
+  const pasteDuplicates = useMemo(() => {
+    if (!pasteMarks?.duplicated?.size) return new Map();
+    const all = duplicateGroups((doc?.lines || []).map((line, index) => ({ index, value: line?.sku })));
+    return new Map([...all].filter(([code]) => pasteMarks.duplicated.has(code)));
+  }, [doc?.lines, pasteMarks]);
+
   const partyLists = useMemo(
     () => ({ suppliers, customers, warehouses: warehousesList, reps: repsList, vehicles: vehiclesList, orgLocations: orgLocationsList }),
     [suppliers, customers, warehousesList, repsList, vehiclesList, orgLocationsList]
@@ -308,30 +356,20 @@ export default function DocumentEngine() {
    * الطرف‑الصنف** بطرف المستند نفسه — فكود المورّد يعيد الصنف الداخليّ
    * الصحيح ولا يُنشئ صنفًا مكرّرًا (SR-50)، وكود الطرف يبقى على السطر
    * (`partnerItemCode`) عرضًا في مستنده (§10 ‹257›).
+   *
+   * BULK-000: والمنطق نفسه انتقل إلى `itemResolver.js` — يقرؤه هذا المسار
+   * المفرد والمسارُ الجماعيّ للّصقة معًا. هنا يبقى ما هو من شأن الشاشة
+   * وحدها: من يُخبَر، وأيّ سطرٍ يُكتب.
    */
   async function handleLineLookup(kind, value, index, columnKey = 'barcode') {
     if (kind !== 'item') return;
     try {
-      let item = columnKey === 'sku'
-        ? (await getItem(value)) || (await lookupByBarcode(value))
-        : await lookupByBarcode(value);
-      let viaPartner = null;
-      if (!item) {
-        const header = doc?.header || {};
-        const partner = header.supplierCode
-          ? { partnerType: 'supplier', partnerCode: header.supplierCode }
-          : header.customerCode
-            ? { partnerType: 'customer', partnerCode: header.customerCode }
-            : null;
-        if (partner) {
-          const hit = await lookupItemByPartnerCode({ ...partner, code: value }).catch(() => null);
-          if (hit) {
-            item = hit.item;
-            viaPartner = hit.entry;
-          }
-        }
-      }
-      if (!item) {
+      const resolved = await resolveItemCode(value, {
+        columnKey,
+        partner: documentPartner(doc?.header),
+        lookups: ITEM_LOOKUPS,
+      });
+      if (!resolved) {
         flash(
           columnKey === 'sku'
             ? `⚠️ الكود ${value} غير معرّف في الماستر ولا في كتالوج الطرف — أكمل البند يدويًّا وسجِّل الصنف لاحقًا.`
@@ -340,23 +378,10 @@ export default function DocumentEngine() {
         );
         return;
       }
-      // SAP-3: باركود الوحدة يحدّد الصنف **والوحدة والمعامل** معًا (§10.1 ‹238›).
-      const unitFromBarcode = columnKey === 'sku' ? '' : unitForBarcode(item, value);
+      const { item, viaPartner, unitFromBarcode } = resolved;
       setDoc((d) => {
-        const current = d.lines?.[index];
-        if (!current) return d;
-        const { line } = applyItemToLine(current, item);
-        let next = { ...line, sku: canonicalLineSku(line, item) };
-        // كود الطرف يظهر في مستنده بينما يبقى التخزين على الهويّة الداخليّة.
-        if (viaPartner) {
-          next.partnerItemCode = viaPartner.partnerItemCode;
-          next = stampPartnerUom(next, viaPartner); // تعبئة هذا المورّد لا غيره (§10 ‹256›)
-        }
-        if (unitFromBarcode) next.uom = unitFromBarcode;
-        // وحدةٌ فارغة تأخذ افتراض عائلة المستند: شراءً بوحدة الشراء وبيعًا بوحدة البيع (ف‑٩).
-        if (!String(next.uom ?? '').trim()) next.uom = defaultUomFor(item, type);
-        next = refreshLineBase(next, item); // السطر يحفظ المعامل والأساس (§10.1 ‹234›)
-        const lines = d.lines.map((l, i) => (i === index ? next : l));
+        if (!d.lines?.[index]) return d;
+        const lines = d.lines.map((l, i) => (i === index ? applyResolvedItem(l, resolved, type) : l));
         return { ...d, lines };
       });
       setDirty(true);
@@ -369,6 +394,59 @@ export default function DocumentEngine() {
       // شبكة/صلاحية — لا نعطّل الإدخال اليدوي.
       flash('تعذّر سؤال الماستر — أكمل يدويًّا.', 'err');
     }
+  }
+
+  /**
+   * لصقةٌ جماعيّة (BULK-102/103 · يسدّ ث‑١ وث‑٢ وث‑٣ وث‑٨).
+   *
+   * خطوتان لا عشرون: الصفوفُ تظهر **فورًا** بأكوادها (فلا ينتظر الموظّف
+   * الشبكةَ ليرى ما لصق)، ثمّ نتائجُ الماستر تُكتب **دفعةً واحدة**. وهذا
+   * هو المقصود بـ«تحديثُ حالةٍ واحدٌ للّصقة لا واحدٌ لكلّ صنف»: التحديثُ
+   * لا يتضاعف بعدد الأصناف — عشرون كودًا خطوتان، ومئةٌ خطوتان.
+   *
+   * والرسالةُ واحدةٌ تلخّص (لا عشرون تومض): كم استُبين وكم جُهل وكم تكرّر.
+   */
+  async function handleBulkPaste(nextLines, codes, columnKey) {
+    patchLines(nextLines);
+    if (!codes.length) return;
+
+    const dups = duplicateGroups(codes);
+    const batch = await resolveItemCodes(codes.map((c) => c.value), {
+      columnKey,
+      partner: documentPartner(doc?.header),
+      lookups: ITEM_LOOKUPS,
+    });
+
+    setDoc((d) => {
+      const byIndex = new Map(codes.map((c) => [c.index, c.value]));
+      const lines = (d.lines || []).map((line, i) => {
+        const hit = byIndex.has(i) ? outcomeFor(batch, byIndex.get(i)) : null;
+        return hit?.status === 'ok' ? applyResolvedItem(line, hit.resolved, type) : line;
+      });
+      return { ...d, lines };
+    });
+    setDirty(true);
+    // العلاماتُ تُكتب بعد الحلّ — والمستبانُ لا يُعلَّم.
+    setPasteMarks({ statuses: codeStatuses(batch), duplicated: new Set(dups.keys()) });
+
+    const parts = [`استُبين ${batch.ok}`];
+    if (batch.unknown) parts.push(`مجهول ${batch.unknown}`);
+    if (batch.failed) parts.push(`تعذّر سؤاله ${batch.failed}`);
+    if (dups.size) parts.push(`مكرّر ${dups.size}`);
+    flash(`📋 ${codes.length} كودًا في ${codes.length} بندًا — ${parts.join(' · ')}.`,
+      batch.unknown || batch.failed ? 'err' : 'ok');
+  }
+
+  /**
+   * دمجُ مكرّرٍ **بضغطةٍ من المستخدم** لا تلقائيًّا (BULK-O01): الدمجُ
+   * التلقائيّ يفقد معلومةً يحتاجها المستودع — دفعتان أو موقعان أو سعران
+   * للصنف نفسِه يصيران رقمًا واحدًا ويضيع التفريق. فالقرارُ لمن يعرف.
+   */
+  function mergeDuplicate(code) {
+    const indexes = pasteDuplicates.get(code);
+    if (!indexes || indexes.length < 2) return;
+    patchLines(mergeDuplicateLines(doc.lines || [], indexes));
+    flash(`🔗 دُمج ${indexes.length} بندًا للصنف ${code} — الكمّيّة مجموعة.`);
   }
 
   function patchChecklist(next) {
@@ -408,7 +486,10 @@ export default function DocumentEngine() {
 
   /** يحفظ ويُعيد معرّف المستند (يُنشئه إن كان جديدًا). */
   async function persist() {
-    const lines = (doc.lines || []).filter((l) => !isEmptyLine(l));
+    // قصُّ الفارغ قبل الكتابة (ث‑٤): صفوفُ الإدخال لا تصير بنودًا في
+    // التخزين ولا في التقارير. والمستندُ بلا محتوًى يُحفظ ببندٍ واحدٍ
+    // فارغٍ لا بعشرة — شكلُ البيانات محفوظٌ ولا بياضَ زائد.
+    const lines = contentLines(doc.lines);
     const payload = { header: doc.header, lines: lines.length ? lines : doc.lines.slice(0, 1) };
 
     if (!docId) {
@@ -712,10 +793,41 @@ export default function DocumentEngine() {
                 disabled={!editable}
                 onChange={patchLines}
                 onLookup={handleLineLookup}
+                onBulkPaste={handleBulkPaste}
                 uomOptions={(line) => uomOptionsForLine(line, itemForLine(line, itemIndexes))}
                 binOptions={binChoices}
                 binVerdict={(value) => binCellVerdict(value, locationsList)}
+                skuVerdict={(value) =>
+                  skuCellVerdict(value, { statuses: pasteMarks?.statuses, duplicates: pasteDuplicates })
+                }
               />
+            )}
+
+            {/* المكرّرُ يُنبَّه ويبقى بندَين — والدمجُ زرٌّ لا قاعدة (BULK-O01). */}
+            {section.kind === 'table' && editable && pasteDuplicates.size > 0 && (
+              <div className="mt-3 rounded-xl border border-amber-400/40 bg-amber-400/5 p-3 text-sm">
+                <p className="font-bold text-ink mb-2">⚠️ أصنافٌ مكرّرةٌ في اللصقة</p>
+                <p className="text-[11px] text-muted mb-2 leading-relaxed">
+                  تبقى بنودًا منفصلةً عمدًا — فقد تكون دفعتين أو موقعين أو سعرين، والجمعُ يُضيّع التفريق.
+                  ادمجها إن كانت الشحنةَ نفسَها.
+                </p>
+                <ul className="space-y-1">
+                  {[...pasteDuplicates].map(([code, indexes]) => (
+                    <li key={code} className="flex items-center gap-2 flex-wrap">
+                      <span className="text-ink-2">
+                        <b>{code}</b> في البنود {indexes.map((i) => i + 1).join(' · ')}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => mergeDuplicate(code)}
+                        className="text-xs font-bold text-accent hover:text-accent/80"
+                      >
+                        ادمجهما
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             )}
 
             {section.kind === 'checklist' && (
