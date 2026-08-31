@@ -11,8 +11,8 @@
   "counts": {
     "modules": 116,
     "serviceDomains": 51,
-    "serviceFiles": 572,
-    "collections": 97,
+    "serviceFiles": 586,
+    "collections": 98,
     "roles": 19,
     "odooModels": 12,
     "odooGuards": 51,
@@ -4497,56 +4497,112 @@
       "domain": "stock",
       "dir": "src/services/stock",
       "files": [
+        "campaign.js",
+        "campaign.test.js",
         "masterSync.js",
         "masterSync.test.js",
+        "monitorLog.js",
+        "monitorLog.test.js",
         "operationCode.js",
         "operationCode.test.js",
         "operationScope.js",
         "operationScope.test.js",
         "operationsService.js",
+        "scanBackup.js",
+        "scanBackup.test.js",
         "scanFlow.js",
         "scanFlow.test.js",
+        "scanIdentity.js",
+        "scanIdentity.test.js",
         "scanMerge.js",
-        "scanMerge.test.js"
+        "scanMerge.test.js",
+        "scanQueue.js",
+        "scanQueue.test.js",
+        "sessionPresence.js",
+        "sessionPresence.test.js",
+        "sessionResume.js",
+        "sessionResume.test.js"
       ],
-      "fileCount": 11,
-      "testCount": 5,
+      "fileCount": 25,
+      "testCount": 12,
       "exports": [
         "CODE_ALPHABET",
         "CODE_LENGTH",
+        "MAX_ENTRIES",
+        "MAX_NAME",
+        "MAX_REMEMBERED",
         "SCAN_MODES",
         "SCOPE_FIELDS",
+        "announceMember",
+        "appendBackup",
         "appendScan",
         "applyLedgerToItems",
+        "backupExportRows",
+        "backupKey",
         "barcodeCandidates",
         "baseQtyPreview",
+        "buildLogRows",
         "buildSessionRows",
+        "byBranch",
+        "campaignLabel",
+        "campaignLogRows",
+        "clearBackup",
         "closeOperation",
+        "closeVerdict",
         "correctionEntry",
         "createOperation",
+        "dedupeScans",
+        "deviceId",
         "exportRows",
+        "filterLogRows",
         "filterRows",
         "findMasterFor",
         "findOperationsByCode",
+        "forgetSession",
         "formatOperationCode",
         "generateOperationCode",
         "getOperation",
         "getScans",
+        "groupByCampaign",
         "indexMaster",
+        "isPending",
         "isScanMode",
         "isValidOperationCode",
+        "issueScanId",
+        "lastSeenByUser",
+        "listBackups",
         "listOpenOperations",
+        "listenMembers",
         "listenOperations",
         "listenScans",
+        "logExportRows",
+        "logPeople",
+        "logTotals",
         "masterFieldsOf",
+        "mergeVerdict",
+        "newCampaignId",
+        "nextSeq",
+        "normalizeCampaignName",
         "normalizeOperationCode",
         "normalizeScope",
         "panelForScan",
         "parseBulkBarcodes",
+        "pendingCount",
+        "presenceLabel",
+        "presenceRows",
+        "presenceSummary",
+        "queueLabel",
+        "queueState",
+        "readBackup",
+        "recentSessions",
         "refreshMasterFields",
+        "rememberSession",
         "resolveOperationByCode",
         "resolveScanUom",
+        "resumeLine",
+        "resumeList",
         "scanBaseQty",
+        "scanDocId",
         "scanEntryVerdict",
         "scanKey",
         "scanUomChoices",
@@ -4554,12 +4610,15 @@
         "scopeLabel",
         "scopeOf",
         "scopeVerdict",
+        "seqKey",
         "sessionProgress",
         "sessionSummary",
+        "setOperationCampaign",
         "setOperationCode",
         "summarizeScans",
         "updateOperationSummary",
-        "withinScope"
+        "withinScope",
+        "workByPerson"
       ],
       "collections": [
         "operations"
@@ -6736,6 +6795,39 @@
             "condition": "isManager()",
             "roles": [
               "isManager"
+            ]
+          },
+          {
+            "actions": [
+              "delete"
+            ],
+            "condition": "false",
+            "roles": []
+          }
+        ]
+      },
+      {
+        "name": "members",
+        "path": "operations/members",
+        "rules": [
+          {
+            "actions": [
+              "read"
+            ],
+            "condition": "signedIn()",
+            "roles": [
+              "signedIn"
+            ]
+          },
+          {
+            "actions": [
+              "create",
+              "update"
+            ],
+            "condition": "(isStockActor() || isCountAssignee()) && memberUid == request.auth.uid",
+            "roles": [
+              "isStockActor",
+              "isCountAssignee"
             ]
           },
           {

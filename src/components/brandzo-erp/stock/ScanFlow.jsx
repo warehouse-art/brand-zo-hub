@@ -35,9 +35,18 @@ import {
   appendScan,
   closeOperation,
   getOperation,
+  listOpenOperations,
+  announceMember,
   listenScans,
   updateOperationSummary,
 } from '../../../services/stock/operationsService.js';
+import {
+  rememberSession,
+  forgetSession,
+  recentSessions,
+  resumeList,
+  resumeLine,
+} from '../../../services/stock/sessionResume.js';
 import {
   SCAN_MODES,
   panelForScan,
@@ -67,6 +76,13 @@ import {
   scopeLabel,
   scopeOf,
 } from '../../../services/stock/operationScope.js';
+import { queueState, queueLabel, closeVerdict } from '../../../services/stock/scanQueue.js';
+import {
+  appendBackup,
+  readBackup,
+  clearBackup,
+  backupExportRows,
+} from '../../../services/stock/scanBackup.js';
 import { fetchLocationsOnce } from '../../../services/locations/locationsService.js';
 import { subscribeAuth, fetchUserProfile } from '../../../services/auth/authService.js';
 import {
@@ -112,6 +128,9 @@ export default function ScanFlow() {
   const [codeBusy, setCodeBusy] = useState(false);
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkText, setBulkText] = useState('');
+  // بطاقة «استأنف جلستك» — الجلسات المفتوحة من الخادم، وترتيبُها من ذاكرة الجهاز.
+  const [resumeOps, setResumeOps] = useState([]);
+  const [resumeBusy, setResumeBusy] = useState(false);
 
   const scanInputRef = useRef(null);
   const qtyInputRef = useRef(null);
@@ -231,9 +250,38 @@ export default function ScanFlow() {
     return listenScans(opId, setScans);
   }, [opId]);
 
+  /**
+   * ★ إعلانُ الحضور — **أثرٌ واحدٌ لكلّ طرق الدخول** (فتحٌ · انضمامٌ برمز ·
+   * رابطُ دعوة · استئنافٌ بعد إعادة تحميل)، ويشترط أن تكون الهويّةُ محمَّلة.
+   *
+   * ولو كُتب عند كلّ نقطةِ دخولٍ على حدة لَوقع في الاستئناف قبل أن يُحمَّل
+   * الملفُّ الشخصيّ، فيُسجَّل العادُّ في لوحة الحضور **ببريده لا باسمه** —
+   * وهو عينُ العطب الذي يحذّر منه `fetchUserProfile` في هذه البوّابة.
+   */
+  useEffect(() => {
+    if (!opId || !me) return;
+    announceMember(opId, me);
+  }, [opId, me]);
+
+  /**
+   * ‹الاستئناف› الجلسات المفتوحة تُقرأ **حين لا يكون العادّ داخل جلسة** —
+   * فهي بطاقةُ عودةٍ لا شريطُ حالةٍ دائم. وقراءةٌ واحدةٌ لا اشتراكٌ حيّ:
+   * قائمةٌ من عشرين رأسًا لا تستحقّ بثًّا مستمرًّا إلى هاتفٍ يعدّ.
+   */
+  useEffect(() => {
+    if (!me || opId) return;
+    refreshResume();
+  }, [me, opId]);
+
   // إيقافُ الكاميرا عند المغادرة صار داخل `useBarcodeCamera` — لا تسريب تدفّق فيديو.
 
   const summary = useMemo(() => sessionSummary(scans), [scans]);
+
+  /**
+   * ‹CAP-303› حالةُ الطابور — كم قراءةً ما زالت في هذا الجهاز ولم تبلغ السحابة.
+   * الحساب في المنطق الخالص المختبَر؛ الشاشة تعرضه ولا تُعيد بناءه.
+   */
+  const queue = useMemo(() => queueState(scans), [scans]);
 
   // فهرسٌ واحد يعرف الباركودات **والأكواد** — فقيد تصحيحٍ كُتب بكود الصنف
   // (لصنفٍ بلا باركود) يعود لصفّ صاحبه لا لصفٍّ مجهولٍ جديد.
@@ -285,13 +333,18 @@ export default function ScanFlow() {
     if (opId) return opId;
     // ‹CAP-201› النطاق يُكتب مع الرأس ويُجمَّد: جلسةٌ بدأ عدُّها لا يتغيّر
     // نطاقُها تحت العادّين، وإلّا صار الكشف يدّعي تغطيةَ ما لم يُعدّ.
-    const { id, code, scope } = await createOperation({
+    const { id, code, scope, saved } = await createOperation({
       type: forMode,
       profile: me,
       warehouse: scopeWh,
       zone: scopeZone,
     });
+    // رأسُ الجلسة يُرفع بلا انتظار (‹CAP-303›) — وفشلُه يُقال حين يقع.
+    saved?.catch?.(() =>
+      flash('err', 'لم يُرفع رأسُ الجلسة بعد — تحقّق من الشبكة أو من صلاحيّتك.')
+    );
     localStorage.setItem(OP_KEY, id);
+    rememberSession(localStorage, { id, code, type: forMode }, { now: Date.now() });
     setOpId(id);
     setOpCode(code || '');
     setOpenScope(scope);
@@ -417,7 +470,29 @@ export default function ScanFlow() {
     setBusy(true);
     try {
       const id = await ensureOperation(mode);
-      await appendScan(id, { ...verdict.entry, profile: me });
+      // ★★ **لا يُنتظر إقرارُ السحابة** ‹CAP-303›: `appendScan` تُعيد وعدًا لا
+      // يُحلّ إلّا بإقرار الخادم، وانتظارُه بلا شبكةٍ **يعلّق الشاشة أبدًا** —
+      // فيقف العادّ في الممرّ يضغط «حفظ» ولا شيء يحدث. وFirestore يقبل القيد
+      // على قرص الجهاز فورًا ويرفعه وحده، فالحفظ **وقع** حين نصل هنا.
+      // والفشلُ المتأخّر (صلاحيةٌ أو جلسةٌ أُقفلت) يُقال حين يقع لا قبله.
+      appendScan(id, { ...verdict.entry, profile: me }).catch((err) => {
+        const closed = String(err?.code || err?.message || '').includes('permission-denied');
+        flash(
+          'err',
+          closed
+            ? `رُفض «${verdict.entry.name || verdict.entry.barcode}»: الجلسة أُقفلت قبل وصوله. عملُك محفوظٌ في «نسخة هذا الجهاز» — صدّره.`
+            : `تعذّر رفع «${verdict.entry.name || verdict.entry.barcode}» — وهو محفوظٌ في «نسخة هذا الجهاز».`
+        );
+      });
+      // ★ النسخة المحلّيّة تُكتب **لحظة الحفظ** لا بعد الإقرار: هي ما ينجو حين
+      // يرفض الخادمُ القيدَ فيُسقطه العميل من طابوره فيختفي من الجهاز والسحابة.
+      if (typeof localStorage !== 'undefined') {
+        appendBackup(localStorage, id, verdict.entry, {
+          byName: me?.name || '',
+          opCode,
+          now: Date.now(),
+        });
+      }
       // المجهول يدخل قائمة الاعتماد القائمة (I-د) باسمه الذي سمّاه الموظّف.
       if (!panelItem) {
         registerPending(
@@ -458,7 +533,18 @@ export default function ScanFlow() {
     }
     try {
       const id = await ensureOperation(mode || 'جرد');
-      await appendScan(id, { ...verdict.entry, profile: me });
+      // كما في `save`: لا انتظارَ لإقرار السحابة — وإلّا تعلّق شاشةُ التصحيح
+      // بلا شبكةٍ تمامًا كما كانت تتعلّق شاشةُ الحفظ ‹CAP-303›.
+      appendScan(id, { ...verdict.entry, profile: me }).catch(() =>
+        flash('err', `تعذّر رفع تصحيح «${row.name || row.barcode}» — وهو محفوظٌ في نسخة هذا الجهاز.`)
+      );
+      if (typeof localStorage !== 'undefined') {
+        appendBackup(localStorage, id, verdict.entry, {
+          byName: me?.name || '',
+          opCode,
+          now: Date.now(),
+        });
+      }
       flash('ok', `صُحّح ${row.name || row.barcode}: قيد فرق ${num(verdict.entry.qty)}`);
     } catch (e) {
       flash('err', e?.message ?? 'تعذّر التصحيح');
@@ -497,6 +583,8 @@ export default function ScanFlow() {
   /** يفتح عمليةً بعد التثبّت منها — مسارٌ واحدٌ للرمز القصير وللمعرّف القديم. */
   function enterOperation(op) {
     localStorage.setItem(OP_KEY, op.id);
+    // ذاكرةُ الجهاز: ترتيبٌ لبطاقة الاستئناف لا صلاحيّةُ دخول.
+    rememberSession(localStorage, op, { now: Date.now() });
     setOpId(op.id);
     setOpCode(op.code || '');
     if (op.type) setMode(op.type);
@@ -504,6 +592,25 @@ export default function ScanFlow() {
     setOpenScope(scopeOf(op));
     setJoinCode('');
     flash('ok', 'انضممت — الجدول أدناه دفتر العملية المشترك.');
+  }
+
+  /**
+   * ‹الاستئناف› يقرأ الجلسات المفتوحة من الخادم ويرتّبها بذاكرة الجهاز.
+   *
+   * وتعذّرُ القراءة **لا يُعطّل شيئًا**: تبقى البطاقة فارغةً ويبقى الانضمامُ
+   * بالرمز وفتحُ جلسةٍ جديدة عاملَين — فالبطاقة اختصارٌ لا بوّابة (ق-٣).
+   */
+  async function refreshResume() {
+    setResumeBusy(true);
+    try {
+      const open = await listOpenOperations(20);
+      const recent = typeof localStorage !== 'undefined' ? recentSessions(localStorage) : [];
+      setResumeOps(resumeList(open, recent));
+    } catch {
+      setResumeOps([]);
+    } finally {
+      setResumeBusy(false);
+    }
   }
 
   async function joinByCode() {
@@ -621,13 +728,52 @@ export default function ScanFlow() {
     }
   }
 
+  /**
+   * ★★ تصديرُ نسخة هذا الجهاز ‹CAP-303› — الحبل الأخير.
+   *
+   * تُصدَّر **كما حُفظت محلّيًّا**، لا كما يعرضها الجدول: الجدول مشتقٌّ من دفتر
+   * السحابة، والمقصود هنا بالذات ما **لم يبلغ** السحابة. فلو تطابقا فبها،
+   * ولو نقص الدفترُ ظهر النقصُ في هذا الملفّ.
+   */
+  async function exportDeviceBackup() {
+    if (!opId || typeof localStorage === 'undefined') return;
+    const entries = readBackup(localStorage, opId);
+    if (!entries.length) {
+      flash('err', 'لا نسخة محلّيّة على هذا الجهاز لهذه الجلسة.');
+      return;
+    }
+    const XLSX = await import('xlsx');
+    const rows = backupExportRows(entries, {
+      formatTime: (v) => (v ? new Date(v).toLocaleString('ar-LY-u-nu-latn') : '—'),
+    });
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'نسخة الجهاز');
+    const stamp = new Date().toISOString().slice(0, 10);
+    XLSX.writeFile(wb, `Device_Backup_${normalizeOperationCode(opCode) || 'session'}_${stamp}.xlsx`);
+    flash('ok', `صُدِّرت ${int(entries.length)} قراءة من نسخة هذا الجهاز.`);
+  }
+
   async function finishOperation() {
     if (!opId) return;
+    // ★★ حارس الإقفال ‹CAP-304›: قاعدة `scans` تشترط أن تكون العمليّة **مفتوحةً
+    // لحظةَ وصول القيد**. فالإقفال وفي الطابور قيدٌ يرفضه الخادم عند عودة
+    // الشبكة — ويضيع عملٌ وقع على الرفّ. والحكمُ في المنطق الخالص المختبَر،
+    // لا شرطًا يُكتب هنا فيُنسى عند إضافة زرٍّ ثانٍ.
+    const verdict = closeVerdict({ pending: queue.pending });
+    if (!verdict.ok) {
+      flash('err', verdict.reason);
+      return;
+    }
     const ok = window.confirm(`إنهاء العملية؟ (${int(summary.scanCount)} قيدًا · ${int(summary.itemCount)} صنفًا)`);
     if (!ok) return;
     try {
       await closeOperation(opId);
+      // النسخة المحلّيّة تُمحى **بعد** إقفالٍ ناجحٍ وطابورٍ خالٍ لا قبله:
+      // ما دام الإقفال لم يُقرّ، هي الوحيدة الباقية.
+      if (typeof localStorage !== 'undefined') clearBackup(localStorage, opId);
       localStorage.removeItem(OP_KEY);
+      // ولا تبقى في بطاقة الاستئناف سطرًا ميّتًا يُضغط فيرتدّ.
+      forgetSession(localStorage, opId);
       setOpId(null);
       setPanel(null);
       flash('ok', 'أُقفلت العملية — عملٌ جديد يبدأ عمليةً جديدة.');
@@ -639,6 +785,97 @@ export default function ScanFlow() {
   return (
     <div className="o_theme" dir="rtl" style={{ maxWidth: '760px', margin: '0 auto' }}>
       {note && <div className={`o_alert ${note.kind === 'err' ? 'danger' : 'success'}`}>{note.text}</div>}
+
+      {/*
+        ★★ مؤشّر «لم يصل بعد» ‹CAP-303› — أعلى الشاشة حيث يراه الواقف في المخزن.
+
+        كان العادّ يمسح خمسين صنفًا والشبكة مقطوعة، فيرى جدولَه ممتلئًا (لأنّ
+        Firestore يعرض قيودَه المحلّيّة) ويظنّ عملَه في السحابة — وهو كلُّه في
+        جيبه. والإشارة كانت موجودةً في اللقطة ومهملةً تمامًا.
+
+        وصفرٌ **بلا مؤشّر**: بطاقةٌ دائمةٌ تقول «٠ غير مُرسَل» تتدرّب العين على
+        تجاهلها، فحين تصير ٤٠ لا يراها أحد. والنصّ نفسُه من المنطق الخالص.
+      */}
+      {queue.pending > 0 && (
+        <div className="o_alert warning" data-scan-queue>
+          <div className="o_alert_title">
+            <Icon name="alertTriangle" size={16} /> غير مُرسَل: {int(queue.pending)}
+          </div>
+          {queueLabel(queue.pending)}
+        </div>
+      )}
+
+      {/*
+        ★ بطاقةُ «استأنف جلستك» — الطريقُ الثالث إلى الجلسة.
+
+        كان الاستئنافُ **صامتًا ومربوطًا بالجهاز**: مفتاحٌ في `localStorage`
+        يُدخِل صاحبَه من تلقائه، فإن بدّل هاتفَه أو مُسح متصفّحُه وقف بلا زرٍّ
+        يضغطه ولا طريقَ إلّا رمزٌ يُملى. والآن: الجلساتُ المفتوحة من الخادم،
+        وجلساتُه هو أوّلَ القائمة بذاكرة جهازه.
+
+        ولا تُعرض وهو داخلَ جلسة (بطاقةُ عودةٍ لا شريطُ حالة)، ولا حين لا
+        جلسةَ مفتوحةً أصلًا (بطاقةٌ فارغةٌ تشغل الشاشة بلا مقابل).
+      */}
+      {!opId && resumeOps.length > 0 && (
+        <div className="o_ds_card o_ds_pad" style={{ marginBottom: '16px' }} data-resume-card>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '10px' }}>
+            <Icon name="history" size={16} />
+            <strong>استأنف جلستك</strong>
+            <span style={{ fontSize: '11px', color: 'var(--o-main-color-muted)' }}>
+              جلساتٌ مفتوحةٌ الآن — ادخل بضغطةٍ بلا رمز.
+            </span>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={refreshResume}
+              disabled={resumeBusy}
+              style={{ marginInlineStart: 'auto' }}
+            >
+              {resumeBusy ? 'جارٍ…' : 'تحديث'}
+            </button>
+          </div>
+          <div style={{ display: 'grid', gap: '8px' }}>
+            {resumeOps.map((op) => (
+              <div
+                key={op.id}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap',
+                  padding: '10px', borderRadius: 'var(--o-border-radius)',
+                  border: '1px solid var(--o-border-color)',
+                  background: op.mine ? 'var(--o-badge-info-bg, #eef4fb)' : 'transparent',
+                }}
+              >
+                <strong
+                  style={{
+                    fontFamily: 'monospace', direction: 'ltr', fontSize: '17px',
+                    letterSpacing: '2px', padding: '2px 8px', borderRadius: '6px',
+                    background: 'var(--o-gray-100, #f1f1f1)',
+                  }}
+                >
+                  {formatOperationCode(op.code) || '—'}
+                </strong>
+                <span style={{ fontSize: 'var(--o-font-size-xs)', color: 'var(--o-main-color-muted)' }}>
+                  {resumeLine(op, (o) => scopeLabel(scopeOf(o)))}
+                </span>
+                {op.mine && (
+                  <span style={{ fontSize: '11px', fontWeight: 'var(--o-font-weight-bold)' }}>
+                    — كنتَ فيها
+                  </span>
+                )}
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  onClick={() => enterOperation(op)}
+                  style={{ marginInlineStart: 'auto' }}
+                  data-resume-enter
+                >
+                  دخول
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ١ — الوضع */}
       <p style={{ margin: '0 0 8px', fontSize: 'var(--o-font-size-sm)', color: 'var(--o-main-color-muted)' }}>
@@ -751,6 +988,20 @@ ${inviteLink}`)}` : undefined}
               يفتحه العضو ويدخل بحسابه — فيجد نفسه داخل الجلسة مباشرةً.
             </span>
           </div>
+          {/*
+            ‹CAP-303› نسخةُ هذا الجهاز — ما حُفظ لحظةَ العدّ، لا ما بلغ السحابة.
+            الزرّ حاضرٌ دائمًا لا عند العطب فقط: من يبحث عن حبلِ النجاة وقتَ
+            الغرق لا يجده. وهو صامتٌ ثانويٌّ لا يزاحم زرّ الدعوة.
+          */}
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={exportDeviceBackup}
+            data-op-backup
+            title="يُصدِّر ما حُفظ على هذا الجهاز — نسخةٌ احتياطيّةٌ تنجو لو رفض الخادمُ القيود."
+          >
+            <Icon name="arrowDownTray" size={14} /> صدّر نسخة هذا الجهاز
+          </button>
           <span style={{ fontSize: 'var(--o-font-size-xs)', color: 'var(--o-main-color-muted)' }}>
             وللإملاء صوتًا — الرمز:
           </span>
@@ -994,7 +1245,19 @@ ${inviteLink}`)}` : undefined}
                 <Icon name="fileUp" size={14} /> تصدير إكسل
               </button>
               {opId && (
-                <button type="button" className="btn btn-secondary btn-sm" onClick={finishOperation}>
+                /*
+                  ‹CAP-304› الزرّ يُعطَّل والطابور غير فارغ، **والسبب مكتوبٌ في
+                  `title` وفي الرسالة عند الضغط** — تعطيلٌ صامتٌ يُقرأ عطبًا.
+                  والحكم من `closeVerdict` الخالص لا شرطًا يُعاد هنا.
+                */
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={finishOperation}
+                  disabled={queue.pending > 0}
+                  data-op-finish
+                  title={closeVerdict({ pending: queue.pending }).reason || 'إقفال الجلسة — لا مسح بعدها.'}
+                >
                   <Icon name="checkCircle" size={14} /> إنهاء العملية
                 </button>
               )}

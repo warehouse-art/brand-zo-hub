@@ -16,7 +16,6 @@
 import {
   collection,
   doc,
-  addDoc,
   setDoc,
   updateDoc,
   getDoc,
@@ -31,6 +30,7 @@ import {
 import { db, auth } from '../../config/firebase.js';
 import { generateOperationCode, normalizeOperationCode } from './operationCode.js';
 import { normalizeScope } from './operationScope.js';
+import { issueScanId } from './scanIdentity.js';
 
 const OPS = 'operations';
 
@@ -68,7 +68,14 @@ function currentUid() {
 export async function createOperation({ type, profile, note = '', warehouse = '', zone = '' }) {
   let code = '';
   try {
-    const open = await listOpenOperations(100);
+    // ★ سباقٌ بمهلة ‹CAP-303›: `getDocs` بلا شبكةٍ قد **يتعلّق** لا أن يرتدّ
+    // (خاصّةً مع `experimentalForceLongPolling`) — فيقف فتحُ الجلسة إلى الأبد.
+    // وفحصُ التفرّد رفاهيةٌ، وفتحُ الجلسة ضرورة. فمن لم يُجب في ثلاث ثوانٍ
+    // يُمضى بدونه — وهو ما كان يفعله فرعُ الفشل أصلًا.
+    const open = await Promise.race([
+      listOpenOperations(100),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000)),
+    ]);
     code = generateOperationCode(Math.random, { taken: open.map((o) => o.code).filter(Boolean) });
   } catch {
     // تعذّرت قراءة المفتوحة (شبكةٌ أو صلاحية) — يُولَّد بلا فحص تفرّدٍ بدل أن
@@ -76,7 +83,12 @@ export async function createOperation({ type, profile, note = '', warehouse = ''
     code = generateOperationCode();
   }
   const scope = normalizeScope({ warehouse, zone });
-  const ref = await addDoc(collection(db, OPS), {
+  // ★★ المعرّف يُولَّد **محلّيًّا** ثمّ يُكتب بلا انتظار ‹CAP-303›:
+  // `addDoc` تُعيد وعدًا لا يُحلّ إلّا بإقرار الخادم — فانتظارُه بلا شبكةٍ
+  // يعلّق فتحَ الجلسة أبدًا. و`doc(collection(…))` يُعطي معرّفًا كاملًا بلا
+  // ذهابٍ إلى الخادم، فتُفتح الجلسة فورًا ويُرفع رأسُها حين تعود الشبكة.
+  const ref = doc(collection(db, OPS));
+  const saved = setDoc(ref, {
     type,
     status: 'open',
     code,
@@ -89,7 +101,9 @@ export async function createOperation({ type, profile, note = '', warehouse = ''
     createdAt: serverTimestamp(),
     closedAt: null,
   });
-  return { id: ref.id, code, scope };
+  // `saved` وعدُ الإقرار — يُعاد ولا يُنتظر هنا: المستدعي يُعلّق عليه رسالةَ
+  // فشلٍ (صلاحيةٌ مرفوضة مثلًا) بلا أن يحبس الشاشةَ في انتظار شبكة.
+  return { id: ref.id, code, scope, saved };
 }
 
 /**
@@ -108,7 +122,17 @@ export async function createOperation({ type, profile, note = '', warehouse = ''
  */
 export function appendScan(opId, { barcode, sku, name, qty, uom, factor, baseQty, uomMissing, collision, profile, opType }) {
   const numOrNull = (v) => (v == null || !Number.isFinite(Number(v)) ? null : Number(v));
-  return addDoc(collection(db, OPS, opId, 'scans'), {
+  // ★★ المعرّفُ يُحسب ولا يُولَّد ‹CAP-302›: `{op}-{device}-{seq}`، فالقيدُ
+  // نفسُه من الجهاز نفسِه له مسارٌ واحدٌ دائمًا — وإرسالُه مرّتين يُنتج
+  // مستندًا واحدًا وكمّيّةً واحدة. والحساب في `scanIdentity.js` المختبَر.
+  // وبلا تخزينٍ (تصفّحٌ خاصّ) يُولَّد معرّفٌ عابرٌ ويمضي العدّ (ق-٣).
+  const store = typeof localStorage !== 'undefined' ? localStorage : null;
+  const { id: scanId, device, seq } = issueScanId(store, opId);
+  return setDoc(doc(db, OPS, opId, 'scans', scanId), {
+    // هويّةُ الجهاز والتسلسل يُختمان في القيد ‹CAP-301›: يفصلان عادَّين
+    // يتشاركان حسابًا، ويجعلان مصدرَ كلّ رقمٍ معروفًا في المراجعة.
+    deviceId: device,
+    seq,
     barcode: String(barcode || ''),
     sku: String(sku || ''),
     name: String(name || ''),
@@ -125,11 +149,71 @@ export function appendScan(opId, { barcode, sku, name, qty, uom, factor, baseQty
   });
 }
 
-/** يستمع لقيود المسح لحظياً (لدمج عمل بقيّة الموظّفين). */
+/**
+ * ★★ يُعلن حضورَ صاحب الجهاز في الجلسة — «مَن دخل» لا «مَن قرأ».
+ *
+ * ومعرّفُ المستند **هويّةُ صاحبه**: فلا يتكرّر عضوٌ مهما دخل وخرج، والقاعدة
+ * تشترط `memberUid == request.auth.uid` فلا يُعلن أحدٌ حضورَ غيره.
+ *
+ * و`mergeFields` لا `set` كاملًا: عودةُ العضو تُحدّث `lastEnteredAt` **ولا
+ * تمحو** `joinedAt` الأوّل — فيبقى معروفًا متى دخل أوّلَ مرّة.
+ *
+ * ★ ولا يُنتظر إقرارُه ولا يُسقط شيئًا عند الفشل: **الحضورُ إعلانٌ لا إذن**،
+ *   ومن تعذّر تسجيلُه يعدّ كما هو ويظهر عند المدير من قراءاته (ق-٣).
+ */
+export function announceMember(opId, profile) {
+  const uid = currentUid();
+  if (!opId || !uid) return Promise.resolve();
+  return setDoc(
+    doc(db, OPS, opId, 'members', uid),
+    {
+      uid,
+      name: profile?.name || auth?.currentUser?.email || 'غير معروف',
+      role: profile?.role || '',
+      joinedAt: serverTimestamp(),
+      lastEnteredAt: serverTimestamp(),
+    },
+    { merge: true }
+  ).catch(() => {});
+}
+
+/**
+ * يستمع لأعضاء الجلسة لحظيًّا — لشاشة المدير.
+ *
+ * ولا `orderBy`: المجموعةُ صغيرةٌ (أفرادُ لجنة)، والترتيبُ حكمٌ خالصٌ في
+ * `sessionPresence.js` يُقدّم **الصامتَ** لا الأقدمَ دخولًا.
+ *
+ * وفشلُ القراءة (قاعدةٌ لم تُنشر بعد) يُعيد قائمةً فارغةً ولا يُعطّل الشاشة:
+ * الحضورُ إضافةٌ على الجدول لا شرطٌ له.
+ */
+export function listenMembers(opId, callback) {
+  return onSnapshot(
+    collection(db, OPS, opId, 'members'),
+    (snap) => callback(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
+    () => callback([])
+  );
+}
+
+/**
+ * يستمع لقيود المسح لحظياً (لدمج عمل بقيّة الموظّفين).
+ *
+ * ★ **ويختم كلَّ قيدٍ بـ`_pending` ‹CAP-303›:** `hasPendingWrites` على مستوى
+ * اللقطة كانت تُمرَّر وسيطًا ثانيًا **ترميه الشاشة**، فيمسح العادّ خمسين صنفًا
+ * والشبكة مقطوعة ويرى جدولَه ممتلئًا ويظنّ عملَه في السحابة. والعلامة على
+ * **القيد نفسه** هي ما يُبنى منه العدد: «٤٠ قراءة لم تصل» — لا حالةٌ عامّةٌ
+ * تقول «شيءٌ ما معلَّق».
+ *
+ * والحقل مسبوقٌ بشرطةٍ سفليّة عمدًا: صفةُ نقلٍ محلّيّة لا حقلَ مستندٍ مخزَّن،
+ * فلا يُخلط بما يُكتب في Firestore ولا يُصدَّر عمودًا.
+ */
 export function listenScans(opId, callback) {
   const q = query(collection(db, OPS, opId, 'scans'), orderBy('at', 'asc'));
-  return onSnapshot(q, (snap) => {
-    const scans = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  return onSnapshot(q, { includeMetadataChanges: true }, (snap) => {
+    const scans = snap.docs.map((d) => ({
+      id: d.id,
+      ...d.data(),
+      _pending: d.metadata.hasPendingWrites,
+    }));
     callback(scans, snap.metadata.hasPendingWrites);
   });
 }
@@ -195,6 +279,29 @@ export async function findOperationsByCode(code) {
   if (!norm) return [];
   const snap = await getDocs(query(collection(db, OPS), where('code', '==', norm), limit(10)));
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+}
+
+/**
+ * ★★ يربط جلسةً بحملةٍ (أو يفكّها) — **دمجُ الجلسات منطقيٌّ لا فيزيائيّ**.
+ *
+ * ولا يُنقل قيدُ مسحٍ واحد: قاعدة `scans` تمنع التعديل والحذف منعًا باتًّا،
+ * والنسخُ يكتب `byUid` الناسخِ فيصير جردُ محمدٍ باسم المدير — تزويرٌ للأثر
+ * الذي طُلب الدمجُ من أجله. فتبقى كلُّ جلسةٍ بقيودها وكاتبيها، ويُكتب على
+ * **رأسها** انتماؤها.
+ *
+ * ★ **وبلا تعديلِ سطرٍ في `firestore.rules`:** `allow update: if isManager()`
+ *   قائمةٌ ولا تحصر الحقول — فالميزةُ تعمل يومَ رفعها بلا نشرٍ من الكونسول.
+ *   ومَن دون المديرين يرتدّ طلبُه `permission-denied`، فتقول الشاشة ذلك.
+ *
+ * @param {string} opId
+ * @param {{campaignId?:string, campaignName?:string}} campaign
+ *   ومعرّفٌ فارغٌ **يفكّ** الارتباط — مسحُ حقلٍ لا حذفُ بيان.
+ */
+export function setOperationCampaign(opId, { campaignId = '', campaignName = '' } = {}) {
+  return updateDoc(doc(db, OPS, opId), {
+    campaignId: String(campaignId || ''),
+    campaignName: String(campaignName || ''),
+  });
 }
 
 /**
