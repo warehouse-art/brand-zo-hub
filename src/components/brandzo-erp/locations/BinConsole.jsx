@@ -7,8 +7,28 @@ import { subscribeWarehouses } from '../../../services/locations/warehouseServic
 import { listenLocations } from '../../../services/locations/locationsService.js';
 import { listenBalances } from '../../../services/balances/balancesService.js';
 import { createDraft } from '../../../services/documents/documentsService.js';
+import {
+  appendScan,
+  closeOperation,
+  createOperation,
+  listOpenOperations,
+  listenScans,
+} from '../../../services/stock/operationsService.js';
+import {
+  BIN_SESSION_TYPE,
+  findSessionFor,
+  scanPayload,
+  scanProblems,
+  scansOfBin,
+  sessionDraft,
+  sessionLabel,
+  sessionScopeFor,
+  sessionSummary,
+} from '../../../services/locations/binSession.js';
 import { listUnitsAt } from '../../../services/lpn/lpnService.js';
-import { binHeadline, binPrefixOf, warehouseForBin } from '../../../services/locations/binAnatomy.js';
+import { binHeadline, binPrefixOf, segmentLabelsOf, warehouseForBin } from '../../../services/locations/binAnatomy.js';
+import { withAssignments } from '../../../services/locations/binTemplate.js';
+import BIN_SCHEMES from '../../../data/warehouse-schemes.json';
 import { normalizeLocationCode } from '../../../services/locations/locationCode.js';
 import {
   BIN_MODES,
@@ -18,6 +38,7 @@ import {
   draftLineFor,
   entryProblems,
   linesForScan,
+  identifyBin,
   modeOf,
   orderRequirementOf,
   routeScan,
@@ -41,6 +62,9 @@ import {
  * الكاتبةُ تُنشئ **مسوّدةَ مستندٍ** تمرّ بمحرّك المستندات — نفسِ الطريق الذي
  * يمرّ به كلُّ شيء. فلا مسارَ رصيدٍ ثانٍ.
  */
+
+const TEMPLATES = BIN_SCHEMES?.templates || [];
+const ASSIGNMENTS = BIN_SCHEMES?.assignments || [];
 
 const num = (n) => new Intl.NumberFormat('en-US').format(Number(n) || 0);
 const IN = 'bg-surface border border-line rounded-lg text-ink text-sm px-2.5 py-2 focus:outline-none focus:border-accent/50';
@@ -70,11 +94,20 @@ export default function BinConsole() {
   const [balances, setBalances] = useState([]);
   const [units, setUnits] = useState([]);
 
+  // ★★★ مرحلتان لا واحدة (طلب المالك 2026-09-02): `pending` كودٌ **قُرئ ولم
+  // يُحدَّد بعد**، و`bin` كودٌ **حدّده العامل**. والمسحُ فعلٌ أعمى — فمن يفتح
+  // الخانةَ فورًا يجعل العاملَ يعمل في رفٍّ لم يتأكّد أنّه رفُّه.
+  const [pending, setPending] = useState('');
   const [bin, setBin] = useState('');
-  const [mode, setMode] = useState('lookup');
+  // الافتراضُ «جرد» — وهو إثباتُ ما في الخانة، وأكثرُ ما يُفعل عند الرفّ.
+  const [mode, setMode] = useState('count');
   const [scanned, setScanned] = useState('');
   const [qty, setQty] = useState('');
   const [destination, setDestination] = useState('');
+  // ★★★ الجلسةُ سجلٌّ ملحق-فقط في السحابة لا قائمةٌ في الشاشة (طلب المالك
+  // 2026-09-02): كلُّ مسحةٍ تُثبَّت لحظتَها، فمن أُغلق هاتفُه لا يضيع عملُه.
+  const [session, setSession] = useState(null);
+  const [scans, setScans] = useState([]);
   const [entries, setEntries] = useState([]);
   const [msg, setMsg] = useState({ type: '', text: '' });
   const [busy, setBusy] = useState('');
@@ -99,10 +132,28 @@ export default function BinConsole() {
     return () => { a?.(); b?.(); c?.(); };
   }, [me]);
 
-  const whDoc = useMemo(() => warehouseForBin(bin, warehouses), [bin, warehouses]);
+  /** الكودُ الفاعل — المعروضُ للتعريف إن وُجد، وإلّا المحدَّد. */
+  const activeCode = pending || bin;
+
+  /**
+   * ★ المستودعاتُ مُغنَاةً بالإسناد المعتمد — فيعرف العاملُ مستودعَه وتسمياتِ
+   * مقاطعه **قبل** أن يُحفظ القالبُ على الوثيقة. والمحفوظُ يتقدّم دائمًا.
+   */
+  const effectiveWarehouses = useMemo(
+    () => withAssignments(warehouses, { assignments: ASSIGNMENTS, templates: TEMPLATES }),
+    [warehouses]
+  );
+
+  const whDoc = useMemo(() => warehouseForBin(activeCode, effectiveWarehouses), [activeCode, effectiveWarehouses]);
   const knownCodes = useMemo(() => (locations || []).map((l) => l.code), [locations]);
-  const contents = useMemo(() => binContents(bin, { balances, units }), [bin, balances, units]);
+  const contents = useMemo(() => binContents(activeCode, { balances, units }), [activeCode, balances, units]);
   const problem = useMemo(() => (bin ? binProblem(bin, knownCodes) : ''), [bin, knownCodes]);
+
+  /** بطاقةُ التعريف — كلُّ ما تعرضه المرحلةُ الأولى، من المنطق الخالص. */
+  const ident = useMemo(
+    () => (pending ? identifyBin(pending, { warehouses: effectiveWarehouses, knownCodes, balances, units }) : null),
+    [pending, effectiveWarehouses, knownCodes, balances, units]
+  );
   const m = modeOf(mode);
 
   /**
@@ -110,7 +161,7 @@ export default function BinConsole() {
    * والخانة (`listUnitsAt`)، فلا تُقرأ آلافُ الطبالي لعرض رفٍّ واحد.
    */
   useEffect(() => {
-    const code = normalizeLocationCode(bin);
+    const code = normalizeLocationCode(activeCode);
     if (!me || !code || !whDoc) { setUnits([]); return undefined; }
     let alive = true;
     // ⚠️ هويّتان مشروعتان للمستودع على الطبليّة: كودُ البوّابة (`WH001`) وبادئةُ
@@ -124,15 +175,28 @@ export default function BinConsole() {
         setUnits(groups.flat().filter((u) => (seen.has(u.code) ? false : seen.add(u.code))));
       });
     return () => { alive = false; };
-  }, [me, bin, whDoc]);
+  }, [me, activeCode, whDoc]);
+
+  /** قيودُ الجلسة حيّةً — مصدرُ الحقيقة، لا قائمةُ الشاشة. */
+  useEffect(() => {
+    if (!session?.id) { setScans([]); return undefined; }
+    return listenScans(session.id, setScans);
+  }, [session?.id]);
+
+  /** تسمياتُ مقاطع هذا المستودع — تقول «الممرّ» حيث يُسمّيه المستودعُ ممرًّا. */
+  const labels = useMemo(() => segmentLabelsOf(whDoc), [whDoc]);
+  const summary = useMemo(() => sessionSummary(scans), [scans]);
+  const binScans = useMemo(() => scansOfBin(scans, bin), [scans, bin]);
 
   /** الصفوفُ التي يطابقها ما مُسح — قد تكون دفعاتٍ شتّى لصنفٍ واحد. */
   const hits = useMemo(() => (scanned ? linesForScan(contents, scanned) : []), [contents, scanned]);
   const [pickedBatch, setPickedBatch] = useState(0);
   const item = hits[pickedBatch] || hits[0] || null;
 
-  const openBin = useCallback((code) => {
-    setBin(code);
+  /** يُغلق الخانة ويعود إلى المسح — ويمسح كلَّ أثرٍ من الخانة السابقة. */
+  const resetBin = useCallback(() => {
+    setPending('');
+    setBin('');
     setScanned('');
     setQty('');
     setPickedBatch(0);
@@ -141,11 +205,65 @@ export default function BinConsole() {
     setMsg({ type: '', text: '' });
   }, []);
 
+  /**
+   * ★★ المسحةُ **تعرض** الخانةَ ولا تفتحها. والفتحُ بضغطة «حدّد» — وهذا هو
+   * الفرقُ بين أن يرى العاملُ ما مسح، وأن يكتشفه بعد أن يُثبت كمّيّاتٍ في
+   * المكان الغلط. ومسحُ خانةٍ ثانيةٍ وهو داخلَ الأولى يعرضها كذلك ولا يقفز.
+   */
+  const presentBin = useCallback((code) => {
+    setPending(code);
+    setScanned('');
+    setQty('');
+    setPickedBatch(0);
+    setMsg({ type: '', text: '' });
+  }, []);
+
+  /**
+   * يعتمد المعروضَ فيصير الخانةَ المفتوحة — وهنا يبدأ العمل.
+   *
+   * ★★ وتُفتح **جلسةُ الممرّ** أو تُستأنف المفتوحةُ له: العاملُ يمشي ممرًّا
+   * كاملًا، فجلسةٌ لكلّ خانةٍ تعني مئةَ محضرِ جردٍ في ممرٍّ واحد. وعاملان في
+   * الممرّ نفسِه يكتبان في سجلٍّ واحد.
+   *
+   * ولا يُنتظر إقرارُ الخادم: createOperation تُعيد معرّفًا محلّيًّا فورًا
+   * (درسُ ‹CAP-303›: انتظارُ الإقرار بلا شبكةٍ يعلّق الشاشة أبدًا).
+   */
+  const confirmBin = useCallback(async () => {
+    const code = pending;
+    setBin(code);
+    setPending('');
+    setEntries([]);
+    setCreated(null);
+    setMsg({ type: '', text: '' });
+
+    const scope = sessionScopeFor(code);
+    if (!scope.warehouse || session) return;
+
+    try {
+      const open = await listOpenOperations(50).catch(() => []);
+      const found = findSessionFor(open, code);
+      if (found) { setSession(found); return; }
+      const made = await createOperation({
+        type: BIN_SESSION_TYPE,
+        profile: me,
+        note: 'جلسةُ جرد خانات',
+        warehouse: scope.warehouse,
+        zone: scope.zone,
+      });
+      setSession({ id: made.id, code: made.code, type: BIN_SESSION_TYPE, status: 'open', ...made.scope });
+      made.saved?.catch?.((err) =>
+        setMsg({ type: 'error', text: 'تعذّر رفعُ رأس الجلسة: ' + (err?.message || 'سببٌ غير معروف') })
+      );
+    } catch (err) {
+      setMsg({ type: 'error', text: 'تعذّر فتحُ الجلسة: ' + (err?.message || 'سببٌ غير معروف') });
+    }
+  }, [pending, session, me]);
+
   /** المسحةُ الواحدة — وجهتُها من التصنيف، والرفضُ يقول الصواب. */
   const onScanned = useCallback(
     (raw) => {
       const v = routeScan(raw, { hasBin: Boolean(bin) });
-      if (v.action === 'bin') { openBin(v.code); return; }
+      if (v.action === 'bin') { presentBin(v.code); return; }
       if (v.action === 'item') {
         setScanned(v.code);
         setPickedBatch(0);
@@ -158,14 +276,38 @@ export default function BinConsole() {
       }
       setMsg({ type: 'error', text: v.message });
     },
-    [bin, openBin]
+    [bin, presentBin]
   );
 
   const camera = useBarcodeCamera({ onCode: onScanned, closeOnCode: true });
   useWedgeScanner(onScanned, { enabled: ready && Boolean(me) });
 
+  /**
+   * ★★★ المسحةُ تُثبَّت في السحابة **فورًا** ولا تُنتظر (وضعُ الجرد).
+   *
+   * ولا `await`: وعدُ `setDoc` لا يُحلّ بلا شبكة، وانتظارُه يعلّق الشاشةَ
+   * أبدًا والعادُّ يضغط ولا شيء يحدث (درسُ ‹CAP› الحرفيّ). فيُرسَل ويُمضى،
+   * وFirestore يرفعه حين تعود الشبكة. والفشلُ الحقيقيّ يُعلَن في `catch`.
+   */
   function addEntry() {
-    const line = draftLineFor(mode, { bin, item: item || { sku: scanned }, qty, bookQty: item?.qty ?? 0 });
+    const source = item || { sku: scanned, barcode: scanned };
+
+    if (mode === 'count') {
+      const problems = scanProblems({ bin, item: source, qty });
+      if (problems.length) { setMsg({ type: 'error', text: problems[0] }); return; }
+      if (!session?.id) { setMsg({ type: 'error', text: 'لا جلسةَ مفتوحة — أعد تحديد الخانة.' }); return; }
+
+      appendScan(session.id, scanPayload({ bin, item: source, qty, bookQty: item?.qty ?? 0, profile: me }))
+        .catch((err) => setMsg({ type: 'error', text: 'لم تُثبَّت المسحة: ' + (err?.message || 'سببٌ غير معروف') }));
+
+      setScanned('');
+      setQty('');
+      setPickedBatch(0);
+      setMsg({ type: 'success', text: 'ثُبِّتت المسحة.' });
+      return;
+    }
+
+    const line = draftLineFor(mode, { bin, item: source, qty, bookQty: item?.qty ?? 0 });
     const problems = entryProblems(mode, { line, contents, scanned });
     if (problems.length) { setMsg({ type: 'error', text: problems[0] }); return; }
     setEntries((prev) => [...prev, line]);
@@ -173,6 +315,29 @@ export default function BinConsole() {
     setQty('');
     setPickedBatch(0);
     setMsg({ type: 'success', text: 'أُضيف البند.' });
+  }
+
+  /**
+   * إنهاءُ الجلسة — المحضرُ يُبنى من **القيود المحفوظة** لا من الشاشة.
+   * والإقفالُ بعد إنشاء المستند: من أقفل أوّلًا رفض الخادمُ ما بقي في طابور
+   * الهاتف (درسُ ‹CAP›: الإقفالُ يبتلع الطابور).
+   */
+  async function finishSession() {
+    if (!session?.id) return;
+    const draft = sessionDraft(session, scans, { warehouseCode: whDoc?.code || '' });
+    if (!draft) { setMsg({ type: 'error', text: 'لا مسحاتٍ في الجلسة بعد.' }); return; }
+    setBusy('يُنهي الجلسة…');
+    setMsg({ type: '', text: '' });
+    try {
+      const id = await createDraft({ type: draft.type, profile: me, header: draft.header, lines: draft.lines });
+      await closeOperation(session.id).catch(() => {});
+      setCreated({ id, type: draft.type, lines: draft.lines.length });
+      setSession(null);
+    } catch (err) {
+      setMsg({ type: 'error', text: err?.message || 'تعذّر الإنهاء.' });
+    } finally {
+      setBusy('');
+    }
   }
 
   async function saveDraft() {
@@ -214,21 +379,21 @@ export default function BinConsole() {
         </div>
         <div className="flex flex-wrap gap-2 items-center">
           <input
-            value={bin}
-            onChange={(e) => openBin(e.target.value.toUpperCase())}
+            value={activeCode}
+            onChange={(e) => presentBin(e.target.value.toUpperCase())}
             placeholder="RH-A-R-01-01"
             autoComplete="off"
             style={{ direction: 'ltr', textAlign: 'right' }}
             className={`${IN} flex-1 min-w-[200px] font-mono`}
           />
           <ScanCameraButton camera={camera} label="امسح" />
-          {bin && (
-            <button type="button" onClick={() => openBin('')} className="btn-secondary text-xs">
-              أغلق الخانة
+          {(bin || pending) && (
+            <button type="button" onClick={resetBin} className="btn-secondary text-xs">
+              {bin ? 'أغلق الخانة' : 'إلغاء'}
             </button>
           )}
         </div>
-        <ScanCameraPanel camera={camera} hint="وجّه العدسة إلى ملصق الخانة — تُفتح الخانة بما فيها." />
+        <ScanCameraPanel camera={camera} hint="وجّه العدسة إلى ملصق الخانة — يُعرض ما قرأتْه العدسة، ثمّ تُحدّده أنت." />
         {problem && <div className="text-xs text-brand-red">{problem}</div>}
         {/*
           ★★★ الرسالةُ هنا لا في قسمٍ مشروطٍ بخانةٍ مفتوحة (كُشف بالفحص الحيّ
@@ -240,9 +405,99 @@ export default function BinConsole() {
         )}
       </section>
 
-      {/* ═══ الطبقة ٢ — الخانة مفتوحةً: هويّتُها ومحتواها ═══ */}
-      {bin && !problem && (
+      {/* ═══ المرحلة ١ — قُرئ وعُرِّف · ولم يُحدَّد بعد ═══ */}
+      {ident && (
+        <section className="o_ds o_ds_card o_ds_pad space-y-3 border border-accent/40">
+          <div className="flex items-center gap-2">
+            <Icon name="mapPin" size={16} className="text-accent" />
+            <h3 className="font-bold text-ink text-sm">هذا ما قرأتْه العدسة — تأكّدْ قبل أن تعمل</h3>
+          </div>
+
+          <div className="font-mono font-bold text-ink text-lg" style={{ direction: 'ltr' }}>{ident.code}</div>
+
+          {ident.valid && ident.segments.length > 0 && (
+            <div className="flex flex-wrap gap-x-6 gap-y-2">
+              {ident.warehouse && (
+                <div>
+                  <div className="text-[11px] text-muted">المستودع</div>
+                  <div className="text-sm font-bold text-ink">{ident.warehouse.nameAr || ident.warehouse.name || ident.warehouse.code}</div>
+                </div>
+              )}
+              {ident.segments.map((seg) => (
+                <div key={seg.key}>
+                  <div className="text-[11px] text-muted">{seg.label}</div>
+                  <div className="text-sm font-bold text-ink">{seg.text}</div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* ملخّصٌ سريع: أفارغةٌ هي أم فيها بضاعة — قبل أن يدخل. */}
+          {ident.valid && !ident.problem && (
+            <div className="flex flex-wrap items-center gap-5 pt-1 border-t border-line">
+              {ident.summary.empty ? (
+                <span className="text-xs text-ink-2">الخانة فارغة — لا رصيدَ مسجَّلٌ عليها ولا طبليّة.</span>
+              ) : (
+                <>
+                  <Stat label="أصناف" value={num(ident.summary.skuCount)} />
+                  <Stat label="مجموع الكمّيّات" value={num(ident.summary.totalQty)} />
+                  <Stat label="طبالي واقفة" value={num(ident.summary.palletCount)} tone={ident.summary.palletCount ? '' : 'muted'} />
+                </>
+              )}
+            </div>
+          )}
+
+          {ident.problem && <div className="text-xs text-brand-red">{ident.problem}</div>}
+          {ident.warning && <div className="text-xs text-ink-2">{ident.warning}</div>}
+
+          <div className="flex flex-wrap gap-2 items-center pt-1">
+            <button
+              type="button"
+              onClick={confirmBin}
+              disabled={!ident.valid || Boolean(ident.problem)}
+              className="btn-primary text-xs"
+            >
+              حدّد هذه الخانة
+            </button>
+            <button type="button" onClick={resetBin} className="btn-secondary text-xs">
+              إلغاء — امسح غيرها
+            </button>
+            <span className="text-[11px] text-muted">ولا يبدأ العملُ قبل أن تُحدّد.</span>
+          </div>
+        </section>
+      )}
+
+      {/* ═══ المرحلة ٢ — الخانة محدَّدةً: هويّتُها ومحتواها ═══ */}
+      {bin && !pending && !problem && (
         <>
+          {/* ═══ شريطُ الجلسة — كلُّ مسحةٍ فيه مثبَّتةٌ في السحابة ═══ */}
+          {session && (
+            <section className="o_ds o_ds_card o_ds_pad flex flex-wrap items-center gap-x-5 gap-y-2">
+              <Icon name="clipboardList" size={16} className="text-accent shrink-0" />
+              <div>
+                <div className="text-[11px] text-muted">جلسةٌ مفتوحة</div>
+                <div className="text-sm font-bold text-ink">
+                  {sessionLabel(session, whDoc, labels)}
+                  {session.code && (
+                    <span className="font-mono text-[11px] text-muted" style={{ direction: 'ltr' }}> · {session.code}</span>
+                  )}
+                </div>
+              </div>
+              <Stat label="مسحاتٌ مثبَّتة" value={num(summary.scanCount)} />
+              <Stat label="خانات" value={num(summary.binCount)} />
+              <Stat label="مجموع المعدود" value={num(summary.counted)} />
+              <div className="flex-1" />
+              <button
+                type="button"
+                onClick={finishSession}
+                disabled={Boolean(busy) || summary.scanCount === 0}
+                className="btn-primary text-xs"
+                title={summary.scanCount ? '' : 'لا مسحاتٍ بعد'}
+              >
+                {busy || 'أنهِ الجلسة وابنِ المحضر'}
+              </button>
+            </section>
+          )}
           <section className="o_ds o_ds_card o_ds_pad space-y-2">
             <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
               <span className="font-mono font-bold text-ink text-base" style={{ direction: 'ltr' }}>{bin}</span>
@@ -379,8 +634,29 @@ export default function BinConsole() {
 
           </section>
 
-          {/* ═══ الطبقة ٤ — المسوّدة قبل الحفظ ═══ */}
-          {entries.length > 0 && (
+          {/* ═══ ما ثُبِّت في هذه الخانة — من السحابة لا من الشاشة ═══ */}
+          {mode === 'count' && binScans.length > 0 && (
+            <section className="o_ds o_ds_card o_ds_pad space-y-2">
+              <div className="flex items-center gap-2">
+                <Icon name="checkCircle" size={16} className="text-accent" />
+                <h3 className="font-bold text-ink text-sm">ثُبِّت في هذه الخانة — {num(binScans.length)}</h3>
+                <span className="text-[11px] text-muted">محفوظٌ في السحابة، ولو أُغلق الهاتف</span>
+              </div>
+              <ul className="text-xs text-ink-2 space-y-1 list-none p-0">
+                {binScans.map((sc) => (
+                  <li key={sc.id}>
+                    <span className="font-mono" style={{ direction: 'ltr', display: 'inline-block' }}>{sc.sku || sc.barcode}</span>
+                    {' — '}معدود {num(sc.qty)}
+                    {sc.batch ? ` · دفعة ${sc.batch}` : ''}
+                    {Number.isFinite(sc.bookQty) ? ` · دفتريّ ${num(sc.bookQty)}` : ''}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          {/* ═══ الطبقة ٤ — المسوّدة قبل الحفظ (للأوضاع الأخرى) ═══ */}
+          {mode !== 'count' && entries.length > 0 && (
             <section className="o_ds o_ds_card o_ds_pad space-y-3">
               <div className="flex items-center gap-2">
                 <Icon name="clipboardList" size={16} className="text-accent" />
