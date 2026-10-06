@@ -69,6 +69,8 @@ test('الشاشة مسجّلةٌ في كتالوج القائمة وفي دلي
 });
 
 test('جدول الأعمال عشرة بنود، والفرعيّان تحت البند الرابع', () => {
+  // عشرةُ بنودٍ رئيسة: أُسقط «تأخر طلبات الشراء» وأُضيف «الأمن والنظافة» (أمرُ المالك 2026-10-06)،
+  // **والترقيمُ أُعيد فلا فجوةَ فيه** — ولا نصَّ في المحتوى يشير إلى بندٍ برقمه غيرَ الثامن.
   assert.equal(agenda.length, 10);
   const fourth = agenda.find((item) => item.num === '4');
   assert.ok(fourth, 'البند الرابع مفقود');
@@ -84,11 +86,24 @@ test('كل بندٍ يحمل عنوانًا وتمهيدًا وما يُطلب �
     assert.ok(section.headline?.trim(), `البند ${section.num} بلا عنوان`);
     assert.ok(section.lead?.trim(), `البند ${section.num} بلا تمهيد`);
     assert.ok((section.blocks || []).length >= 3, `البند ${section.num} أفقر من أن يُعرض`);
-    assert.ok((section.decisions || []).length >= 1, `البند ${section.num} لا يطلب شيئًا من الإدارة`);
-    for (const decision of section.decisions) {
+    // ★ بندٌ بلا طلبات مسموحٌ منذ 2026-10-06: المالك ألغى طلبات البند 4.2 كلَّها،
+    //   فصار بندَ عرضٍ لا بندَ طلب. **والمحظورُ أن يخلو العرضُ كلُّه**، لا أن
+    //   يخلو بندٌ منه — وذلك ما يحرسه التوكيدُ بعد الحلقة.
+    for (const decision of section.decisions || []) {
       assert.ok(decision.ask?.trim(), `طلبٌ بلا نصّ في البند ${section.num}`);
     }
   }
+});
+
+test('★ ترقيمُ البنود الرئيسة متّصلٌ بلا فجوة — فحذفُ بندٍ يُعيد الترقيم', () => {
+  const tops = sections.filter((section) => section.level === 0).map((section) => Number(section.num));
+  assert.deepEqual(tops, tops.map((_value, index) => index + 1), `ترقيمٌ فيه فجوة: ${tops.join(' · ')}`);
+});
+
+test('العرضُ كلُّه لا يخلو من ملاحظاتٍ وطلبات', () => {
+  assert.ok(allDecisions.length >= 20, `العرضُ يحمل ${allDecisions.length} ملاحظةً وطلبًا فقط`);
+  const withAsks = sections.filter((section) => (section.decisions || []).length > 0).length;
+  assert.ok(withAsks >= sections.length - 2, 'أكثرُ من بندين بلا ملاحظاتٍ ولا طلبات — هل حُذفت سهوًا؟');
 });
 
 test('كل صورةٍ ومخطّطٍ يَعِد بهما العرض ملفٌّ قائمٌ على القرص', () => {
@@ -138,7 +153,7 @@ test('لا شريحةَ تتجاوز سعة مسرح 1280×720', () => {
 test('كل طلبٍ من الإدارة يصل إلى شرائح الإقفال — لا يسقط طلب', () => {
   const closing = slides.filter((slide) => slide.kind === 'closing').flatMap((slide) => slide.items);
   assert.equal(closing.length, allDecisions.length);
-  assert.ok(allDecisions.length >= 20, 'عددُ الطلبات أقلّ من المتوقَّع');
+  assert.ok(allDecisions.length >= 20, 'عددُ الملاحظات والطلبات أقلّ من المتوقَّع');
   for (const decision of closing) {
     assert.ok(decision.sectionNum?.trim(), 'طلبٌ في الإقفال بلا رقم بند');
   }
@@ -199,7 +214,7 @@ test('العرض التنفيذيّ لا يتجاوز 24 شريحة — زمنُ
 test('★★★ لا شريحةَ تنفيذيّةٍ تتجاوز 110 كلمة — وإلّا عاد التقريرُ المُلصق', () => {
   // شرائحُ النظرة (البطاقة ولوحة الأرقام) تُقرأ لمحةً فتُحكم بالكلمات.
   for (const slide of executiveSlides) {
-    if (slide.kind !== 'brief' && slide.kind !== 'numbers') continue;
+    if (slide.kind !== 'brief') continue;
     const count = execWords(slide);
     assert.ok(count <= 110, `شريحة «${slide.title}» تحمل ${count} كلمة والحدّ 110`);
   }
@@ -229,9 +244,6 @@ test('سعةُ الشريحة التنفيذيّة محترمة: مؤشّرات�
     }
     if (slide.kind === 'asks') {
       assert.ok(slide.items.length <= EXEC_CAPACITY.asks, `شريحة طلبات «${slide.title}» تجاوزت السعة`);
-    }
-    if (slide.kind === 'numbers') {
-      assert.ok(slide.items.length <= EXEC_CAPACITY.numbers, 'لوحة الأرقام تجاوزت السعة');
     }
   }
 });
@@ -311,4 +323,52 @@ test('★★ المسرحُ على صفٍّ مرنٍ يقبل الانكماش �
   const base = css.match(/\.gm-meeting-deck\s*\{[\s\S]*?\}/)?.[0] || '';
   assert.match(base, /grid-template-rows:\s*auto\s+minmax\(\s*0\s*,\s*1fr\s*\)\s+auto/, 'الصفُّ المرن بلا `minmax(0, …)` يرفض أن يصغر دون محتواه فيفيض');
   assert.match(base, /height:\s*calc\(100dvh\s*-\s*var\(--gm-top/, 'ارتفاعُ اللوحة يجب أن يطرح إزاحةَ رأسها — `100dvh` من رأسٍ مُزاحٍ تتجاوز الشاشة');
+});
+
+/*
+  ★★★ **حارسُ القصّ بين الطبقتين** — وُضع بعد انهيارٍ حيٍّ 2026-10-06: الرجوعُ
+  من الملحق (145 شريحة) إلى العرض التنفيذيّ (23) أبقى الموضعَ 134، فقرأ
+  المكوّن `deck[134]` من طبقةٍ فيها 23 فجاءت `undefined` وانفجر على
+  `slide.kind` — واختفت اللوحةُ كلُّها من الشاشة.
+
+  ولا يمسكه اختبارُ بيانات: العطبُ في قراءةِ حالةٍ أثناء تبديل طبقة. فيُحرس
+  بقراءة المكوّن نفسِه — كما حُرس الصفُّ المنزلق بقراءة CSS.
+*/
+test('★★★ موضعُ الشريحة يُقصّ على طول الطبقة قبل القراءة', async () => {
+  const jsx = await readFile(
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../components/gm-meeting/GmMeetingDeck.jsx'),
+    'utf8',
+  );
+  assert.match(jsx, /const\s+active\s*=\s*Math\.min\(\s*rawActive\s*,/, 'الموضعُ يُقرأ بلا قصٍّ — شريحةٌ خارج الطبقة تُسقط اللوحة كلَّها');
+  assert.match(jsx, /const\s+current\s*=\s*deck\[active\]/, 'الشريحةُ الحاليّة يجب أن تُقرأ بالموضع المقصوص');
+});
+
+test('★★ كلُّ بندٍ له نقطةُ هبوطٍ في الطبقتين — فزرُّ التفاصيل لا يضلّ', () => {
+  const execKeys = new Set(executiveSlides.filter((s) => s.kind === 'brief').map((s) => s.key));
+  const annexKeys = new Set(slides.filter((s) => s.kind === 'section').map((s) => s.key));
+  for (const section of sections) {
+    assert.ok(execKeys.has(section.key), `البند ${section.num} بلا بطاقةٍ في العرض التنفيذيّ`);
+    assert.ok(annexKeys.has(section.key), `البند ${section.num} بلا افتتاحيّةٍ في الملحق — زرُّ التفاصيل سيقفز إلى الغلاف`);
+  }
+});
+
+/*
+  ★★ **رابطٌ يَعِد بوثيقةٍ** من جنس الصورة التي يَعِد بها العرض: إن غاب الملفُّ
+  انكسر الوعدُ **أمام الإدارة** لا في سجلّ. ويُحرس بالقرص لا بالثقة.
+
+  ★★★ **والمسارُ نسبيٌّ إلزامًا**: هذا الملفُّ يُزامَن إلى مستودع الشركة،
+  وعنوانُ نشرتنا مثبّتًا فيه يصحّ هنا ويخطئ هناك — عطبٌ يسافر ولا ينفجر
+  إلّا بعد أيّام في المستودع الآخر (وقد وقع من قبلُ في `build-usage-guide`).
+*/
+test('كلُّ رابطِ وثيقةٍ يَعِد به بندٌ ملفٌّ قائمٌ تحت public/ — وبمسارٍ نسبيّ', () => {
+  const linked = sections.filter((section) => section.link);
+  assert.ok(linked.length >= 1, 'لا رابطَ وثيقةٍ في أيّ بند — هل سقط؟');
+  for (const section of linked) {
+    const { href, label } = section.link;
+    assert.ok(label?.trim(), `رابطُ البند ${section.num} بلا نصّ زرّ`);
+    assert.ok(!/^https?:\/\//i.test(href), `رابطُ البند ${section.num} عنوانٌ مطلق: ${href}`);
+    assert.ok(!href.startsWith('/'), `رابطُ البند ${section.num} يجب أن يكون نسبيًّا: ${href}`);
+    const file = href.split('#')[0].split('?')[0];
+    assert.ok(existsSync(path.join(PUBLIC_DIR, file)), `وثيقةٌ مفقودة تحت public/: ${file}`);
+  }
 });

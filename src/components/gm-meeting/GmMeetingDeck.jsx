@@ -28,6 +28,11 @@ const LayersIcon = () => (
     <path d="M12 3l9 5-9 5-9-5 9-5zM3 13l9 5 9-5M3 17l9 5 9-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
   </svg>
 );
+const DocIcon = () => (
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8l-5-5zM14 3v5h5M9 13h6M9 17h6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
 const GridIcon = () => (
   <svg viewBox="0 0 24 24" aria-hidden="true">
     <path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
@@ -205,7 +210,7 @@ function CoverSlide({ base }) {
           <div><dt>التاريخ</dt><dd>{meetingMeta.dayName} {meetingMeta.date}</dd></div>
           <div><dt>مقدّم العرض</dt><dd>{meetingMeta.preparedBy}</dd></div>
           <div><dt>مرجع الوثيقة</dt><dd className="gm-ltr">{meetingMeta.docNumber}</dd></div>
-          <div><dt>القرارات المطلوبة</dt><dd className="gm-ltr">{allDecisions.length}</dd></div>
+          <div><dt>ملاحظات وطلبات</dt><dd className="gm-ltr">{allDecisions.length}</dd></div>
         </dl>
       </div>
     </section>
@@ -215,7 +220,7 @@ function CoverSlide({ base }) {
 function AgendaSlide({ onJump }) {
   return (
     <section className="gm-slide is-agenda">
-      <SlideHead kicker="جدول الأعمال" title="عشرة بنود — ينتهي كلٌّ منها بما هو مطلوب من الإدارة العامة" />
+      <SlideHead kicker="جدول الأعمال" title={`${agenda.length} بنود — ينتهي كلٌّ منها بملاحظاته وطلباته`} />
       <ol className="gm-agenda">
         {agenda.map((item) => (
           <li key={item.key}>
@@ -257,6 +262,14 @@ function SectionSlide({ slide, base }) {
                 </div>
               ))}
             </div>
+          )}
+          {/* ★ وثيقةٌ منشورةٌ يفتحها البندُ في لسانٍ جديد — فلا يضيع العرضُ
+              تحت يد المتحدّث. والمسارُ نسبيٌّ يسبقه `base`: عنوانُ نشرتنا
+              مثبّتًا في ملفٍّ يُزامَن يصحّ هنا ويخطئ في مستودع الشركة. */}
+          {section.link && (
+            <a className="gm-doc-link" href={asset(base, section.link.href)} target="_blank" rel="noopener noreferrer">
+              <DocIcon /> {section.link.label}
+            </a>
           )}
         </div>
       </div>
@@ -325,7 +338,7 @@ function DecisionsSlide({ slide }) {
   const { section, items } = slide;
   return (
     <section className="gm-slide is-decisions">
-      <SlideHead kicker={`${section.num} · ${section.navTitle}`} title="المطلوب من الإدارة العامة" />
+      <SlideHead kicker={`${section.num} · ${section.navTitle}`} title="ملاحظات وطلبات" />
       <ol className="gm-decisions">
         {items.map((item, index) => (
           <li key={index}>
@@ -344,7 +357,7 @@ function ClosingSlide({ slide }) {
       <SlideHead
         kicker="خلاصة الاجتماع"
         title="القرارات والتوجيهات المطلوبة من الإدارة العامة"
-        note={`إجمالي ${allDecisions.length} طلبًا موزّعةً على عشرة بنود`}
+        note={`إجمالي ${allDecisions.length} ملاحظةً وطلبًا على ${agenda.length} بنود`}
       />
       <div className="gm-closing-grid">
         {slide.items.map((item, index) => (
@@ -359,32 +372,12 @@ function ClosingSlide({ slide }) {
 }
 
 /* ── شرائح العرض التنفيذيّ ─────────────────────────────────────────
-   ثلاثُ شرائحَ لا تعرض إلّا ما هو مكتوبٌ أصلًا في المحتوى: لوحةُ أرقام،
-   وبطاقةُ بندٍ واحدة لكلّ بند، وقائمةُ الطلبات بنصّ الطلب وحده. والتفصيل
-   كلُّه حاضرٌ في الملحق المرجعيّ — فلا يُفقد شيء، ولا يُعرض كلُّ شيء. */
+   شريحتان لا تعرضان إلّا ما هو مكتوبٌ أصلًا في المحتوى: بطاقةُ بندٍ واحدة
+   لكلّ بند، وقائمةُ الطلبات بنصّ الطلب وحده. والتفصيل كلُّه حاضرٌ في الملحق
+   المرجعيّ — فلا يُفقد شيء، ولا يُعرض كلُّ شيء. */
 
-function NumbersSlide({ slide }) {
-  return (
-    <section className="gm-slide is-numbers">
-      {/* العنوان يُشتقّ من العدد لا يُكتب رقمًا ثابتًا — فلا يقول «عشرة» ويعرض ثمانية. */}
-      <SlideHead
-        kicker="الصورة في أرقام"
-        title={`البنود العشرة في ${slide.items.length} رقمًا — وتفصيلُ كلٍّ في بنده`}
-      />
-      <div className="gm-numbers">
-        {slide.items.map((item, index) => (
-          <article key={index}>
-            <span className="gm-ltr">البند {item.sectionNum}</span>
-            <b className={/^[\x20-\x7E]+$/.test(item.value || '') ? 'gm-ltr' : undefined}>{item.value}</b>
-            <span>{item.label}</span>
-          </article>
-        ))}
-      </div>
-    </section>
-  );
-}
 
-function BriefSlide({ slide, base }) {
+function BriefSlide({ slide, base, onDetails }) {
   const { section, kpis, asks } = slide;
   const hero = section.hero ? asset(base, section.hero) : null;
   return (
@@ -409,9 +402,20 @@ function BriefSlide({ slide, base }) {
           </div>
         )}
         <footer className="gm-brief-asks">
-          مطلوبٌ من الإدارة العامة في هذا البند: <b className="gm-ltr">{asks}</b>
-          {asks === 1 ? ' طلب' : asks === 2 ? ' طلبان' : asks <= 10 ? ' طلبات' : ' طلبًا'}
-          {' '}— والتفصيل في الملحق المرجعيّ.
+          {/* بندٌ بلا طلبات بندُ عرضٍ لا نقص — فلا يُكتب «0 طلبات». */}
+          <span>
+            {asks === 0 ? 'بند عرضٍ — لا ملاحظات ولا طلبات عليه' : (
+              <>
+                ملاحظات وطلبات هذا البند: <b className="gm-ltr">{asks}</b>
+                {asks === 1 ? ' طلب' : asks === 2 ? ' طلبان' : asks <= 10 ? ' طلبات' : ' طلبًا'}
+              </>
+            )}
+          </span>
+          {/* الملحقُ يُفتح **عند هذا البند** لا من أوّله — فالتفصيلُ يُطلب في
+              سياقه، والرجوعُ يعيد إلى البطاقة نفسِها لا إلى الغلاف. */}
+          <button type="button" className="gm-details" onClick={() => onDetails(section.key)}>
+            <LayersIcon /> تفاصيل هذا البند
+          </button>
         </footer>
       </div>
     </section>
@@ -422,9 +426,9 @@ function AsksSlide({ slide }) {
   return (
     <section className="gm-slide is-asks">
       <SlideHead
-        kicker="المطلوب من الإدارة العامة"
-        title="طلبات القرار والتوجيه"
-        note={`إجمالي ${allDecisions.length} طلبًا على عشرة بنود — وتعليلُ كلّ طلبٍ في الملحق المرجعيّ`}
+        kicker="خلاصة البنود"
+        title="ملاحظات وطلبات"
+        note={`إجمالي ${allDecisions.length} ملاحظةً وطلبًا على ${agenda.length} بنود — وتفصيلُ كلٍّ في الملحق المرجعيّ`}
       />
       <ol className="gm-asks">
         {slide.items.map((item, index) => (
@@ -474,7 +478,7 @@ function shortLabel(slide) {
   return parts.length > 1 ? parts[parts.length - 1] : slide.title;
 }
 
-function Slide({ slide, base, onJump }) {
+function Slide({ slide, base, onJump, onDetails }) {
   switch (slide.kind) {
     case 'cover': return <CoverSlide base={base} />;
     case 'agenda': return <AgendaSlide onJump={onJump} />;
@@ -485,8 +489,7 @@ function Slide({ slide, base, onJump }) {
     case 'gallery': return <GallerySlide slide={slide} base={base} />;
     case 'decisions': return <DecisionsSlide slide={slide} />;
     case 'closing': return <ClosingSlide slide={slide} />;
-    case 'numbers': return <NumbersSlide slide={slide} />;
-    case 'brief': return <BriefSlide slide={slide} base={base} />;
+    case 'brief': return <BriefSlide slide={slide} base={base} onDetails={onDetails} />;
     case 'asks': return <AsksSlide slide={slide} />;
     case 'signoff': return <SignoffSlide base={base} />;
     default: return null;
@@ -504,13 +507,21 @@ export default function GmMeetingDeck({ base = '' }) {
     لا سياق لها.
   */
   const [annex, setAnnex] = useState(false);
-  const [active, setActive] = useState(0);
+  const [rawActive, setActive] = useState(0);
   const [showIndex, setShowIndex] = useState(false);
   const [presenting, setPresenting] = useState(false);
   const frameRef = useRef(null);
 
   const deck = annex ? slides : executiveSlides;
   const total = deck.length;
+  /*
+    ★★★ **الموضعُ يُقصّ على الطبقة الحاليّة** (انهيارٌ حيٌّ 2026-10-06): الرجوعُ
+    من الملحق إلى العرض يبدّل الطبقةَ في هذه الرسمة، والموضعُ لا يُصحَّح إلّا
+    في أثرٍ **بعدها** — فقرأ المكوّن الشريحةَ 134 من طبقةٍ فيها 23، فجاءت
+    `undefined` وانفجر على `slide.kind` قبل أن يصل الأثرُ أصلًا.
+    فالقصُّ هنا لا في الأثر: لا تُقرأ شريحةٌ خارج الطبقة ولو لرسمةٍ واحدة.
+  */
+  const active = Math.min(rawActive, Math.max(0, total - 1));
   const current = deck[active];
 
   /** أول شريحةٍ لكل بند — للقفز من جدول الأعمال ومن الفهرس. */
@@ -523,11 +534,39 @@ export default function GmMeetingDeck({ base = '' }) {
     return map;
   }, [annex, deck]);
 
+  /*
+    ★ الملحقُ يُفتح **عند البند** لا من أوّله. و`pendingKey` يحمل مفتاحَ البند
+    بين الطبقتين، لأنّ موضعَ البند يُحسب على الطبقة المقصودة لا الحاليّة —
+    فيُؤجَّل القفزُ إلى ما بعد التبديل بأثرٍ يقرأ `sectionStarts` الجديدة.
+  */
+  const [pendingKey, setPendingKey] = useState(null);
+
   const toggleAnnex = useCallback(() => {
     setAnnex((value) => !value);
     setActive(0);
     setShowIndex(false);
+    setPendingKey(null);
   }, []);
+
+  /** من بطاقة البند التنفيذيّة إلى تفصيله في الملحق — وبالعكس. */
+  const openDetails = useCallback((key) => {
+    setAnnex(true);
+    setShowIndex(false);
+    setPendingKey(key);
+  }, []);
+
+  const backToBrief = useCallback(() => {
+    setAnnex(false);
+    setShowIndex(false);
+    setPendingKey(current?.key ?? null);
+  }, [current]);
+
+  useEffect(() => {
+    if (!pendingKey) return;
+    const index = sectionStarts.get(pendingKey);
+    setActive(index === undefined ? 0 : index);
+    setPendingKey(null);
+  }, [pendingKey, sectionStarts]);
 
   const go = useCallback((index) => {
     setActive(Math.max(0, Math.min(total - 1, index)));
@@ -648,6 +687,11 @@ export default function GmMeetingDeck({ base = '' }) {
           <span className="gm-ltr">{meetingMeta.docNumber}</span>
         </div>
         <div className="gm-tools">
+          {annex && current?.key && (
+            <button type="button" className="gm-back-brief" onClick={backToBrief}>
+              <BackIcon /> رجوع إلى بطاقة البند
+            </button>
+          )}
           <button type="button" onClick={toggleAnnex} aria-pressed={annex}>
             <LayersIcon /> {annex ? 'العرض التنفيذيّ' : 'الملحق المرجعيّ'}
           </button>
@@ -660,7 +704,7 @@ export default function GmMeetingDeck({ base = '' }) {
 
       <div className="gm-frame" ref={frameRef}>
         <div className="gm-canvas" style={{ width: DESIGN_WIDTH, height: DESIGN_HEIGHT }}>
-          <Slide slide={current} base={base} onJump={jumpToSection} />
+          <Slide slide={current} base={base} onJump={jumpToSection} onDetails={openDetails} />
         </div>
       </div>
 
