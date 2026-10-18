@@ -542,16 +542,15 @@ test('★ سكربت المزامنة يقرأ مسارات git في موضعٍ 
   assert.match(src, /split\('\\0'\)/, 'والفصل بالمحرف الصفر');
 });
 
-test('ورك-فلو المزامنة التلقائيّة موجودٌ ومحكومٌ بالبطاقة لا بعنوانٍ مثبَّت', () => {
+test('★ الورك-فلو أُفرغ 2026-10-18 — فكُّ الارتباط بالمستودع الشقيق', () => {
+  // كان هنا اختبارٌ يُلزم ملفَّ `sync-from-sibling.yml` بمحتوًى محكومٍ بالبطاقة.
+  // وقد أفرغه المالكُ من محرّر الويب (`33217c9`) فكفَّ السحبُ الساعيُّ — وسقط
+  // الاختبارُ معه فأوقف بوّابةَ النشر. فالشرطُ الآن معكوس: **لا يعمل**.
   const file = path.join(root, '.github', 'workflows', 'sync-from-sibling.yml');
-  assert.ok(fs.existsSync(file), 'ملفّ المزامنة التلقائيّة');
+  if (!fs.existsSync(file)) return; // حُذف كلّيًّا — وهو الغاية
   const yml = fs.readFileSync(file, 'utf8');
-  assert.match(yml, /workspace\.json/, 'الإذن يُقرأ من البطاقة');
-  assert.match(yml, /autoSync/, 'وبمفتاح autoSync تحديدًا');
   assert.ok(
-    !yml.includes(card.repo) && !yml.includes(card.sibling.repo),
-    'لا عنوان مستودعٍ مثبَّتٌ في الورك-فلو — وإلّا عمل في المستودع الخطأ بعد المزامنة'
+    !/^\s*on:/m.test(yml) && !/cron:/.test(yml),
+    'الملفّ يجب أن يبقى بلا مُطلِقٍ — فكُّ الارتباط قرارٌ، وعودتُه تُستأنف بقرارٍ مثله'
   );
-  assert.match(yml, /npm test/, 'البوّابة الخضراء قبل الدفع');
-  assert.match(yml, /gh workflow run astro\.yml/, 'إطلاق النشر — فالدفع بالتوكن لا يُطلقه');
 });
